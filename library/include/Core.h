@@ -88,6 +88,7 @@ namespace DFHack
         friend int  ::DFH_SDL_NumJoysticks(void);
         friend void ::DFH_SDL_Quit(void);
         friend int  ::DFH_SDL_PollEvent(SDL::Event *);
+        friend int  ::DFH_SDL_PushEvent(SDL::Event *);
         friend int  ::DFH_SDL_Init(uint32_t flags);
 #else
         friend int  ::SDL_NumJoysticks(void);

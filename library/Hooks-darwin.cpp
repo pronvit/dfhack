@@ -62,6 +62,7 @@ typedef struct interpose_s
 
 DYLD_INTERPOSE(DFH_SDL_Init,SDL_Init);
 DYLD_INTERPOSE(DFH_SDL_PollEvent,SDL_PollEvent);
+DYLD_INTERPOSE(DFH_SDL_PushEvent,SDL_PushEvent);
 DYLD_INTERPOSE(DFH_SDL_Quit,SDL_Quit);
 DYLD_INTERPOSE(DFH_SDL_NumJoysticks,SDL_NumJoysticks);
 
@@ -109,6 +110,12 @@ DFhackCExport int DFH_SDL_PollEvent(SDL::Event* event)
     return orig_return;
 }
 
+static int (*_SDL_PushEvent)(SDL::Event* event) = 0;
+DFhackCExport int SDL_PushEvent(SDL::Event* event)
+{
+    return _SDL_PushEvent(event);
+}
+
 struct WINDOW;
 DFhackCExport int wgetch(WINDOW *win)
 {
@@ -148,6 +155,7 @@ DFhackCExport int DFH_SDL_Init(uint32_t flags)
     _SDL_Init = (int (*)( uint32_t )) dlsym(RTLD_NEXT, "SDL_Init");
     _SDL_Quit = (void (*)( void )) dlsym(RTLD_NEXT, "SDL_Quit");
     _SDL_PollEvent = (int (*)(SDL::Event*))dlsym(RTLD_NEXT,"SDL_PollEvent");
+    _SDL_PushEvent = (int (*)(SDL::Event*))dlsym(RTLD_NEXT,"SDL_PushEvent");
 
     fprintf(stderr,"dfhack: saved real SDL functions\n");
     // check if we got them
