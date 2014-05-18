@@ -6,6 +6,7 @@
 
 #include "modules/Screen.h"
 #include "modules/Gui.h"
+#include <algorithm>
 #include <set>
 
 #include <VTableInterpose.h>
@@ -36,10 +37,52 @@ bool tool_enabled (std::string tool_name);
 bool tool_enable (std::string tool_name, bool enable_state);
 
 /*
+ * Logic
+ */
+
+void resize_embark (df::viewscreen_choose_start_sitest * screen, int dx, int dy)
+{
+    /* Reproduces DF's embark resizing functionality
+     * Local area resizes up and to the right, unless it's already touching the edge
+     */
+    int x1 = screen->embark_pos_min.x,
+        x2 = screen->embark_pos_max.x,
+        y1 = screen->embark_pos_min.y,
+        y2 = screen->embark_pos_max.y,
+        width = x2 - x1 + dx,
+        height = y2 - y1 + dy;
+    if (x1 == x2 && dx == -1)
+        dx = 0;
+    if (y1 == y2 && dy == -1)
+        dy = 0;
+
+    x2 += dx;  // Resize right
+    while (x2 > 15)
+    {
+        x2--;
+        x1--;
+    }
+    x1 = std::max(0, x1);
+
+    y1 -= dy;  // Resize up
+    while (y1 < 0)
+    {
+        y1++;
+        y2++;
+    }
+    y2 = std::min(15, y2);
+
+    screen->embark_pos_min.x = x1;
+    screen->embark_pos_max.x = x2;
+    screen->embark_pos_min.y = y1;
+    screen->embark_pos_max.y = y2;
+}
+
+/*
  * Viewscreen hooks
  */
 
-void OutputString(int8_t color, int &x, int y, const std::string &text)
+void OutputString (int8_t color, int &x, int y, const std::string &text)
 {
     Screen::paintString(Screen::Pen(' ', color, 0), x, y, text);
     x += text.length();
@@ -63,6 +106,36 @@ struct choose_start_site_hook : df::viewscreen_choose_start_sitest
                 {
                     prevent_default = true;
                     screen->in_embark_normal = 1;
+                }
+            }
+        }
+        if (tool_enabled("nano"))
+        {
+            for (auto iter = input->begin(); iter != input->end(); iter++)
+            {
+                df::interface_key key = *iter;
+                bool is_resize = true;
+                int dx = 0, dy = 0;
+                switch (key)
+                {
+                    case df::interface_key::SETUP_LOCAL_Y_UP:
+                        dy = 1;
+                        break;
+                    case df::interface_key::SETUP_LOCAL_Y_DOWN:
+                        dy = -1;
+                        break;
+                    case df::interface_key::SETUP_LOCAL_X_UP:
+                        dx = 1;
+                        break;
+                    case df::interface_key::SETUP_LOCAL_X_DOWN:
+                        dx = -1;
+                        break;
+                    default:
+                        is_resize = false;
+                }
+                if (is_resize) {
+                    prevent_default = true;
+                    resize_embark(screen, dx, dy);
                 }
             }
         }
