@@ -73,6 +73,10 @@ struct choose_start_site_hook : df::viewscreen_choose_start_sitest
     DEFINE_VMETHOD_INTERPOSE(void, render, ())
     {
         INTERPOSE_NEXT(render)();
+
+        df::viewscreen * top = Gui::getCurViewscreen();
+        VIRTUAL_CAST_VAR(screen, df::viewscreen_choose_start_sitest, top);
+
         auto dim = Screen::getWindowSize();
         int x = 1,
             y = dim.y - 5;
@@ -102,7 +106,11 @@ struct choose_start_site_hook : df::viewscreen_choose_start_sitest
         if (tool_enabled("anywhere"))
         {
             x = 20; y = dim.y - 2;
-            OutputString(COLOR_WHITE, x, y, ": Embark!");
+            if (screen->page == 0)
+            {
+                // Only display on main page (not site finder, notes, etc.)
+                OutputString(COLOR_WHITE, x, y, ": Embark!");
+            }
         }
     }
 };
