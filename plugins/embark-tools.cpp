@@ -4,7 +4,8 @@
 #include "Export.h"
 #include "PluginManager.h"
 
-#include <modules/Screen.h>
+#include "modules/Screen.h"
+#include "modules/Gui.h"
 #include <set>
 
 #include <VTableInterpose.h>
@@ -50,7 +51,23 @@ struct choose_start_site_hook : df::viewscreen_choose_start_sitest
 
     DEFINE_VMETHOD_INTERPOSE(void, feed, (std::set<df::interface_key> *input))
     {
-        INTERPOSE_NEXT(feed)(input);
+        bool prevent_default = false;
+        df::viewscreen * top = Gui::getCurViewscreen();
+        VIRTUAL_CAST_VAR(screen, df::viewscreen_choose_start_sitest, top);
+        if (tool_enabled("anywhere"))
+        {
+            for (auto iter = input->begin(); iter != input->end(); iter++)
+            {
+                df::interface_key key = *iter;
+                if (key == df::interface_key::SETUP_EMBARK)
+                {
+                    prevent_default = true;
+                    screen->in_embark_normal = 1;
+                }
+            }
+        }
+        if (!prevent_default)
+            INTERPOSE_NEXT(feed)(input);
     }
 
     DEFINE_VMETHOD_INTERPOSE(void, render, ())
