@@ -50,12 +50,22 @@ public:
     df::viewscreen_loadgamest* parent_screen ();
 protected:
     int sel_idx;
-    std::vector<df::viewscreen_loadgamest::T_saves> saves;
+    std::vector<df::viewscreen_loadgamest::T_saves*> save_folders;
+    void init_save_folders ();
 };
 
 viewscreen_load_screen::viewscreen_load_screen ()
 {
     sel_idx = 0;
+}
+
+void viewscreen_load_screen::init_save_folders () {
+    std::vector<df::viewscreen_loadgamest::T_saves*> saves = parent_screen()->saves;
+    for (auto iter = saves.begin(); iter != saves.end(); iter++)
+    {
+        df::viewscreen_loadgamest::T_saves * save = *iter;
+        save_folders.push_back(save);
+    }
 }
 
 df::viewscreen_loadgamest* viewscreen_load_screen::parent_screen ()
@@ -81,6 +91,8 @@ void viewscreen_load_screen::feed (std::set<df::interface_key> *input)
 
 void viewscreen_load_screen::render ()
 {
+    if (!save_folders.size())
+        init_save_folders();
     auto dim = Screen::getWindowSize();
     df::viewscreen_loadgamest* parent = parent_screen();
     if (!parent)
@@ -91,7 +103,7 @@ void viewscreen_load_screen::render ()
                         (dim.x / 2) - (title.length() / 2),
                         0,
                         title);
-    auto games = parent->saves;
+    auto games = save_folders;
     int row = 2, i = 0;
     for (auto iter = games.begin(); iter != games.end() && row + 2 < dim.y; iter++, row += 2, i++)
     {
