@@ -4,6 +4,7 @@
 #include "Export.h"
 #include "PluginManager.h"
 
+#include <regex>
 #include <set>
 
 #include <modules/Gui.h>
@@ -34,6 +35,20 @@ void OutputStringCenter (int8_t fg, int y, const std::string text);
 std::string mode_string (df::game_type gametype);
 command_result cmd_load_screen (color_ostream &out, std::vector <std::string> & parameters);
 
+class SaveGame
+{
+public:
+    SaveGame (T_saves save);
+    T_saves save;
+    df::game_type game_type;
+    std::string fort_name;
+    std::string world_name;
+    int32_t year;
+    std::string folder_name;
+    std::string base_folder_name;
+    bool is_backup;
+};
+
 class viewscreen_load_screen : public dfhack_viewscreen
 {
 public:
@@ -49,7 +64,7 @@ public:
 protected:
     int sel_idx;
     int sel_offset;
-    std::vector<T_saves*> save_folders;
+    std::vector<SaveGame*> save_folders;
     void init_save_folders ();
     void show_options ();
     bool mouse_select_save (int x, int y);
@@ -62,11 +77,11 @@ public:
     void render ();
     void help () { };
     std::string getFocusString() { return "loadscreen/options"; };
-    viewscreen_load_options (viewscreen_load_screen * parent, T_saves * save);
+    viewscreen_load_options (viewscreen_load_screen * parent, SaveGame * save);
     ~viewscreen_load_options () { };
 protected:
     viewscreen_load_screen * parent;
-    T_saves * save;
+    SaveGame * save;
     int width;
     int height;
     void do_load ();
@@ -103,6 +118,23 @@ std::string mode_string (df::game_type gametype)
     }
 }
 
+SaveGame::SaveGame (T_saves save):
+    save(save),
+    is_backup(false)
+{
+    this->game_type = save.game_type;
+    this->fort_name = save.fort_name;
+    this->world_name = save.world_name;
+    this->year = save.year;
+    this->folder_name = this->base_folder_name = save.folder_name;
+    int pos = 0;
+    if ((pos = folder_name.find("-")) != std::string::npos)
+    {
+        this->base_folder_name = this->folder_name.substr(0, pos);
+        this->is_backup = true;
+    }
+}
+
 viewscreen_load_screen::viewscreen_load_screen ()
 {
     sel_idx = 0;
@@ -121,7 +153,8 @@ void viewscreen_load_screen::init_save_folders ()
     std::vector<T_saves*> saves = parent_screen()->saves;
     for (auto iter = saves.begin(); iter != saves.end(); iter++)
     {
-        T_saves * save = *iter;
+        T_saves * t_save = *iter;
+        SaveGame * save = new SaveGame(*t_save);
         save_folders.push_back(save);
     }
 }
@@ -194,8 +227,10 @@ void viewscreen_load_screen::render ()
     int row = 2, i = sel_offset;
     for (auto iter = games.begin() + sel_offset; iter != games.end() && row + 2 < dim.y; iter++, row += 2, i++)
     {
-        T_saves * save = *iter;
-        color_value fg = (i == sel_idx) ? COLOR_WHITE : COLOR_GREY;
+        SaveGame * save = *iter;
+        color_value fg = COLOR_GREY;
+        if (save->is_backup) fg = COLOR_RED;
+        if (i == sel_idx) fg = (color_value)(fg + 8);
         color_value bg = (i == sel_idx) ? COLOR_GREEN : COLOR_BLACK;
         auto pen = Screen::Pen(' ', fg, bg);
         Screen::fillRect(pen, 2, row, LOAD_LIST_MAX_X, row + 1);
@@ -230,7 +265,7 @@ void viewscreen_load_screen::dismiss ()
     Screen::dismiss(this->parent);
 }
 
-viewscreen_load_options::viewscreen_load_options (viewscreen_load_screen * parent, T_saves * save):
+viewscreen_load_options::viewscreen_load_options (viewscreen_load_screen * parent, SaveGame * save):
     parent(parent),
     save(save),
     width(42),
