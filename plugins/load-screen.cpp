@@ -47,6 +47,7 @@ public:
     void dismiss ();
 protected:
     int sel_idx;
+    int sel_offset;
     std::vector<T_saves*> save_folders;
     void init_save_folders ();
     void show_options ();
@@ -97,6 +98,7 @@ std::string mode_string (df::game_type gametype)
 viewscreen_load_screen::viewscreen_load_screen ()
 {
     sel_idx = 0;
+    sel_offset = 0;
 }
 
 df::viewscreen_loadgamest* viewscreen_load_screen::parent_screen ()
@@ -178,8 +180,11 @@ void viewscreen_load_screen::render ()
                         0,
                         title);
     auto games = save_folders;
-    int row = 2, i = 0;
-    for (auto iter = games.begin(); iter != games.end() && row + 2 < dim.y; iter++, row += 2, i++)
+    int max_rows = (dim.y / 2) - 1;
+    sel_offset = sel_idx - (max_rows - 3);
+    sel_offset = std::max(0, sel_offset);
+    int row = 2, i = sel_offset;
+    for (auto iter = games.begin() + sel_offset; iter != games.end() && row + 2 < dim.y; iter++, row += 2, i++)
     {
         T_saves * save = *iter;
         color_value fg = (i == sel_idx) ? COLOR_WHITE : COLOR_GREY;
