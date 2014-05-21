@@ -122,7 +122,7 @@ bool viewscreen_load_screen::mouse_select_save (int x, int y)
 {
     if (x < 2 || x > LOAD_LIST_MAX_X)
         return false;
-    int index = (y / 2) - 1;
+    int index = (y / 2) - 1 + sel_offset;
     if (index < 0 || index >= save_folders.size())
         return false;
     sel_idx = index;
