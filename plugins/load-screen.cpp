@@ -16,6 +16,8 @@
 #include "df/viewscreen_titlest.h"
 #include "df/viewscreen_loadgamest.h"
 
+#define LOAD_LIST_MAX_X 77
+
 using namespace DFHack;
 
 using df::global::enabler;
@@ -41,6 +43,8 @@ public:
     viewscreen_load_screen ();
     ~viewscreen_load_screen () { };
     df::viewscreen_loadgamest* parent_screen ();
+    bool load_game (std::string folder);
+    void dismiss ();
 protected:
     int sel_idx;
     std::vector<T_saves*> save_folders;
@@ -114,7 +118,7 @@ void viewscreen_load_screen::init_save_folders ()
 
 bool viewscreen_load_screen::mouse_select_save (int x, int y)
 {
-    if (x < 2 || x > 78)
+    if (x < 2 || x > LOAD_LIST_MAX_X)
         return false;
     int index = (y / 2) - 1;
     if (index < 0 || index >= save_folders.size())
@@ -132,8 +136,7 @@ void viewscreen_load_screen::feed (std::set<df::interface_key> *input)
 {
     if (input->count(df::interface_key::LEAVESCREEN))
     {
-        Screen::dismiss(this);
-        Screen::dismiss(this->parent);
+        this->dismiss();
         return;
     }
     else if (input->count(df::interface_key::CURSOR_DOWN))
@@ -180,15 +183,37 @@ void viewscreen_load_screen::render ()
     {
         T_saves * save = *iter;
         color_value fg = (i == sel_idx) ? COLOR_WHITE : COLOR_GREY;
-        auto pen = Screen::Pen(' ', fg, COLOR_BLACK);
+        color_value bg = (i == sel_idx) ? COLOR_GREEN : COLOR_BLACK;
+        auto pen = Screen::Pen(' ', fg, bg);
+        Screen::fillRect(pen, 2, row, LOAD_LIST_MAX_X, row + 1);
         Screen::paintString(pen, 2, row, save->fort_name + " - " + mode_string(save->game_type));
         Screen::paintString(pen, 3, row + 1, "Folder: " + save->folder_name);
+        std::string world_name = save->world_name;
+        Screen::paintString(pen, LOAD_LIST_MAX_X - world_name.length() + 1, row, world_name);
+        std::string year = "Year " + std::to_string(save->year);
+        Screen::paintString(pen, LOAD_LIST_MAX_X - year.length(), row + 1, year);
     }
     if (enabler->tracking_on && gps->mouse_x != -1 && gps->mouse_y != -1 &&
         Gui::getCurFocus() == "dfhack/loadscreen")
     {
         mouse_select_save(gps->mouse_x, gps->mouse_y);
     }
+}
+
+bool viewscreen_load_screen::load_game (std::string folder)
+{
+    df::viewscreen_loadgamest* parent = parent_screen();
+    parent->sel_idx = 0;
+    parent->saves[0]->folder_name = folder;
+    parent->loading = 1;
+    parent->logic();
+    return true;
+}
+
+void viewscreen_load_screen::dismiss ()
+{
+    Screen::dismiss(this);
+    Screen::dismiss(this->parent);
 }
 
 viewscreen_load_options::viewscreen_load_options (viewscreen_load_screen * parent, T_saves * save):
@@ -203,6 +228,12 @@ void viewscreen_load_options::feed (std::set<df::interface_key> *input)
     if (input->count(df::interface_key::LEAVESCREEN))
     {
         Screen::dismiss(this);
+    }
+    else if (input->count(df::interface_key::SELECT))
+    {
+        this->parent->load_game(save->folder_name);
+        Screen::dismiss(this);
+        this->parent->dismiss();
     }
 }
 
