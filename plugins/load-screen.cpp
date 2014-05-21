@@ -30,6 +30,7 @@ class viewscreen_load_options;
 
 void OutputString (int8_t fg, int x, int y, const std::string text);
 void OutputStringX (int8_t fg, int &x, int y, const std::string text);
+void OutputStringCenter (int8_t fg, int y, const std::string text);
 std::string mode_string (df::game_type gametype);
 command_result cmd_load_screen (color_ostream &out, std::vector <std::string> & parameters);
 
@@ -68,6 +69,8 @@ protected:
     T_saves * save;
     int width;
     int height;
+    void do_load ();
+    bool load_flag;
 };
 
 void OutputString (int8_t fg, int x, int y, const std::string text)
@@ -78,6 +81,11 @@ void OutputStringX (int8_t fg, int &x, int y, const std::string text)
 {
     OutputString(fg, x, y, text);
     x += text.length();
+}
+void OutputStringCenter (int8_t fg, int y, const std::string text)
+{
+    int x = Screen::getWindowSize().x / 2 - text.length() / 2;
+    OutputString(fg, x, y, text);
 }
 
 std::string mode_string (df::game_type gametype)
@@ -198,6 +206,7 @@ void viewscreen_load_screen::render ()
         std::string year = "Year " + std::to_string(save->year);
         Screen::paintString(pen, LOAD_LIST_MAX_X - year.length(), row + 1, year);
     }
+    OutputStringCenter(COLOR_LIGHTCYAN, dim.y - 1, "\031 More \031");
     if (enabler->tracking_on && gps->mouse_x != -1 && gps->mouse_y != -1 &&
         Gui::getCurFocus() == "dfhack/loadscreen")
     {
@@ -225,7 +234,8 @@ viewscreen_load_options::viewscreen_load_options (viewscreen_load_screen * paren
     parent(parent),
     save(save),
     width(42),
-    height(12)
+    height(12),
+    load_flag(false)
 { }
 
 void viewscreen_load_options::feed (std::set<df::interface_key> *input)
@@ -236,14 +246,19 @@ void viewscreen_load_options::feed (std::set<df::interface_key> *input)
     }
     else if (input->count(df::interface_key::SELECT))
     {
-        this->parent->load_game(save->folder_name);
-        Screen::dismiss(this);
-        this->parent->dismiss();
+        load_flag = true;
     }
 }
 
 void viewscreen_load_options::render ()
 {
+    if (load_flag)
+    {
+        Screen::clear();
+        OutputString(COLOR_WHITE, 2, 2, "Loading game...");
+        do_load();
+        return;
+    }
     parent->render();
     auto dim = Screen::getWindowSize();
     int min_x = dim.x / 2 - width / 2,
@@ -263,6 +278,13 @@ void viewscreen_load_options::render ()
     x = min_x + 2; y = max_y - 2;
     OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::LEAVESCREEN));
     OutputStringX(COLOR_WHITE, x, y, ": Back");
+}
+
+void viewscreen_load_options::do_load ()
+{
+    this->parent->load_game(save->folder_name);
+    Screen::dismiss(this);
+    this->parent->dismiss();
 }
 
 struct loadgame_hooks : df::viewscreen_loadgamest
