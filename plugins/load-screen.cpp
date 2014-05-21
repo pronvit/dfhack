@@ -59,6 +59,7 @@ public:
     viewscreen_load_screen ();
     ~viewscreen_load_screen () { };
     df::viewscreen_loadgamest* parent_screen ();
+    bool select_game (std::string folder);
     bool load_game (std::string folder);
     void dismiss ();
 protected:
@@ -249,6 +250,22 @@ void viewscreen_load_screen::render ()
     }
 }
 
+bool viewscreen_load_screen::select_game (std::string folder)
+{
+    int i = 0;
+    for (auto iter = save_folders.begin(); iter != save_folders.end(); iter++, i++)
+    {
+        SaveGame * save = *iter;
+        if (folder == save->folder_name)
+        {
+            this->sel_idx = i;
+            this->show_options();
+            return true;
+        }
+    }
+    return false;
+}
+
 bool viewscreen_load_screen::load_game (std::string folder)
 {
     df::viewscreen_loadgamest* parent = parent_screen();
@@ -269,7 +286,7 @@ viewscreen_load_options::viewscreen_load_options (viewscreen_load_screen * paren
     parent(parent),
     save(save),
     width(42),
-    height(12),
+    height(7),
     load_flag(false)
 { }
 
@@ -281,7 +298,15 @@ void viewscreen_load_options::feed (std::set<df::interface_key> *input)
     }
     else if (input->count(df::interface_key::SELECT))
     {
-        load_flag = true;
+        this->load_flag = true;
+    }
+    else if (input->count(df::interface_key::CUSTOM_U))
+    {
+        if (this->save->is_backup)
+        {
+            Screen::dismiss(this);
+            this->parent->select_game(this->save->base_folder_name);
+        }
     }
 }
 
@@ -294,23 +319,56 @@ void viewscreen_load_options::render ()
         do_load();
         return;
     }
+
+    int x, y;
+    std::string play_now_label =  ": Play now";
+    std::string is_backup_warning;
+
+    height = 7;
+    if (this->save->is_backup)
+    {
+        height += 3;
+        is_backup_warning = "Warning: This is a backup of \"" + this->save->base_folder_name + "\"";
+        play_now_label = ": Play anyway";
+    }
+    width = std::max(width, (int)is_backup_warning.length() + 4);
+
     parent->render();
     auto dim = Screen::getWindowSize();
-    int min_x = dim.x / 2 - width / 2,
-        max_x = dim.x / 2 + width / 2,
-        min_y = dim.y / 2 - height / 2,
-        max_y = dim.y / 2 + height / 2;
+    int min_x = (dim.x - width) / 2,
+        max_x = (dim.x + width) / 2,
+        min_y = (dim.y - height) / 2,
+        max_y = (dim.y + height) / 2;
     Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_GREY), min_x, min_y, max_x, max_y);
     Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_BLACK),
                      min_x + 1, min_y + 1, max_x - 1, max_y - 1);
     std::string title = "Load game: " + this->save->folder_name;
     Screen::paintString(Screen::Pen(' ', COLOR_BLACK, COLOR_GREY),
                         dim.x / 2 - title.length() / 2, min_y, title);
-    int x = min_x + 2,
-        y = min_y + 2;
+    if (this->save->is_backup)
+    {
+        x = min_x + 2; y = min_y + 2;
+        OutputString(COLOR_LIGHTMAGENTA, x, y, is_backup_warning);
+        y++;
+        OutputString(COLOR_LIGHTMAGENTA, x, y, "You're probably looking for " + this->save->base_folder_name);
+        y++;
+        OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_U));
+        OutputStringX(COLOR_LIGHTGREEN, x, y, ": Use " + this->save->base_folder_name);
+    }
+    x = min_x + 2;
+    y = max_y - 5;
+    OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_B));
+    OutputStringX(COLOR_WHITE, x, y, ": Load from backup");
+    x = min_x + 2; y++;
+    OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_D));
+    OutputStringX(COLOR_WHITE, x, y, ": Delete old backups");
+    x = min_x + 2; y++;
+
+    x = max_x - 1 - play_now_label.length() - Screen::getKeyDisplay(df::interface_key::SELECT).length();
+    y++;
     OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::SELECT));
-    OutputStringX(COLOR_WHITE, x, y, ": Play now");
-    x = min_x + 2; y = max_y - 2;
+    OutputStringX(COLOR_WHITE, x, y, play_now_label);
+    x = min_x + 2;
     OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::LEAVESCREEN));
     OutputStringX(COLOR_WHITE, x, y, ": Back");
 }
