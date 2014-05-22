@@ -223,9 +223,7 @@ void viewscreen_load_screen::render ()
                         title);
     auto games = save_folders;
     int max_rows = (dim.y / 2) - 1;
-    sel_offset = sel_idx - (max_rows - 3);
-    sel_offset = std::max(0, sel_offset);
-    int row = 2, i = sel_offset;
+    int row = 2, i = this->sel_offset;
     for (auto iter = games.begin() + sel_offset; iter != games.end() && row + 2 < dim.y; iter++, row += 2, i++)
     {
         SaveGame * save = *iter;
@@ -242,11 +240,32 @@ void viewscreen_load_screen::render ()
         std::string year = "Year " + std::to_string(save->year);
         Screen::paintString(pen, LOAD_LIST_MAX_X - year.length(), row + 1, year);
     }
-    OutputStringCenter(COLOR_LIGHTCYAN, dim.y - 1, "\031 More \031");
+    if (sel_offset > 0)
+        OutputStringCenter(COLOR_LIGHTCYAN, 1, "\030 More \030");
+    if (sel_offset < this->save_folders.size() - max_rows && max_rows < this->save_folders.size())
+        OutputStringCenter(COLOR_LIGHTCYAN, dim.y - 1, "\031 More \031");
     if (enabler->tracking_on && gps->mouse_x != -1 && gps->mouse_y != -1 &&
-        Gui::getCurFocus() == "dfhack/loadscreen")
+            Gui::getCurFocus() == "dfhack/loadscreen")
     {
-        mouse_select_save(gps->mouse_x, gps->mouse_y);
+        //mouse_select_save(gps->mouse_x, gps->mouse_y);
+        bool scroll = false;
+        if (gps->mouse_y == dim.y - 1)
+        {
+            this->sel_offset++;
+            this->sel_offset = std::min((int)this->save_folders.size() - max_rows + 1, this->sel_offset);
+            scroll = true;
+        }
+        else if (gps->mouse_y < 2 && sel_offset > 0)
+        {
+            this->sel_offset--;
+            this->sel_offset = std::max(0, this->sel_offset);
+            scroll = true;
+        }
+        if (scroll)
+        {
+            this->sel_offset = std::max(0, std::min((int)this->save_folders.size(), sel_offset));
+            this->sel_idx = std::max(this->sel_offset, std::min(this->sel_offset + max_rows - 1, this->sel_idx));
+        }
     }
 }
 
@@ -322,16 +341,17 @@ void viewscreen_load_options::render ()
 
     int x, y;
     std::string play_now_label =  ": Play now";
-    std::string is_backup_warning;
+    std::string is_backup_warning, is_backup_warning2;
 
     height = 7;
     if (this->save->is_backup)
     {
         height += 3;
         is_backup_warning = "Warning: This is a backup of \"" + this->save->base_folder_name + "\"";
+        is_backup_warning2 = "You're probably looking for the original save";
         play_now_label = ": Play anyway";
     }
-    width = std::max(width, (int)is_backup_warning.length() + 4);
+    width = std::max(width, std::max((int)is_backup_warning.length(), (int)is_backup_warning2.length()) + 4);
 
     parent->render();
     auto dim = Screen::getWindowSize();
@@ -350,7 +370,7 @@ void viewscreen_load_options::render ()
         x = min_x + 2; y = min_y + 2;
         OutputString(COLOR_LIGHTMAGENTA, x, y, is_backup_warning);
         y++;
-        OutputString(COLOR_LIGHTMAGENTA, x, y, "You're probably looking for " + this->save->base_folder_name);
+        OutputString(COLOR_LIGHTMAGENTA, x, y, is_backup_warning2);
         y++;
         OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_U));
         OutputStringX(COLOR_LIGHTGREEN, x, y, ": Use " + this->save->base_folder_name);
