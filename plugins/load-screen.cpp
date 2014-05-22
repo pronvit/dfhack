@@ -35,6 +35,25 @@ void OutputStringCenter (int8_t fg, int y, const std::string text);
 std::string mode_string (df::game_type gametype);
 command_result cmd_load_screen (color_ostream &out, std::vector <std::string> & parameters);
 
+enum loadgame_flags
+{
+    LG_NONE = 0,
+    LG_HIDE_BACKUPS = 1
+};
+
+inline loadgame_flags operator| (loadgame_flags a, loadgame_flags b)
+{
+    return static_cast<loadgame_flags>(static_cast<int>(a) | static_cast<int>(b));
+}
+inline loadgame_flags operator& (loadgame_flags a, loadgame_flags b)
+{
+    return static_cast<loadgame_flags>(static_cast<int>(a) & static_cast<int>(b));
+}
+inline loadgame_flags operator^ (loadgame_flags a, loadgame_flags b)
+{
+    return static_cast<loadgame_flags>(static_cast<int>(a) ^ static_cast<int>(b));
+}
+
 class SaveGame
 {
 public:
@@ -52,22 +71,27 @@ public:
 class viewscreen_load_screen : public dfhack_viewscreen
 {
 public:
+    loadgame_flags flags;
+
+    viewscreen_load_screen ();
+    ~viewscreen_load_screen () { };
+
     void feed (std::set<df::interface_key> *input);
     void render ();
     void help () { };
     std::string getFocusString() { return "loadscreen"; };
-    viewscreen_load_screen ();
-    ~viewscreen_load_screen () { };
+
     df::viewscreen_loadgamest* parent_screen ();
+    void dismiss ();
     bool select_game (std::string folder);
     bool load_game (std::string folder);
-    void dismiss ();
 protected:
     int sel_idx;
     int sel_offset;
     std::vector<SaveGame*> save_folders;
     void init_save_folders ();
     void show_options ();
+    std::vector<SaveGame*> get_saves ();
     bool mouse_select_save (int x, int y);
 };
 
@@ -136,11 +160,11 @@ SaveGame::SaveGame (T_saves save):
     }
 }
 
-viewscreen_load_screen::viewscreen_load_screen ()
-{
-    sel_idx = 0;
-    sel_offset = 0;
-}
+viewscreen_load_screen::viewscreen_load_screen ():
+    sel_idx(0),
+    sel_offset(0),
+    flags(LG_NONE)
+{ }
 
 df::viewscreen_loadgamest* viewscreen_load_screen::parent_screen ()
 {
@@ -160,12 +184,24 @@ void viewscreen_load_screen::init_save_folders ()
     }
 }
 
+std::vector<SaveGame*> viewscreen_load_screen::get_saves ()
+{
+    std::vector<SaveGame*> saves;
+    for (auto iter = this->save_folders.begin(); iter != this->save_folders.end(); iter++)
+    {
+        SaveGame * save = *iter;
+        if (save->is_backup && this->flags & LG_HIDE_BACKUPS) continue;
+        saves.push_back(save);
+    }
+    return saves;
+}
+
 bool viewscreen_load_screen::mouse_select_save (int x, int y)
 {
     if (x < 2 || x > LOAD_LIST_MAX_X)
         return false;
     int index = (y / 2) - 1 + sel_offset;
-    if (index < 0 || index >= save_folders.size())
+    if (index < 0 || index >= this->get_saves().size())
         return false;
     sel_idx = index;
     return true;
@@ -173,11 +209,12 @@ bool viewscreen_load_screen::mouse_select_save (int x, int y)
 
 void viewscreen_load_screen::show_options ()
 {
-    Screen::show(new viewscreen_load_options(this, save_folders[sel_idx]));
+    Screen::show(new viewscreen_load_options(this, this->get_saves()[sel_idx]));
 }
 
 void viewscreen_load_screen::feed (std::set<df::interface_key> *input)
 {
+    auto saves = this->get_saves();
     if (input->count(df::interface_key::LEAVESCREEN))
     {
         this->dismiss();
@@ -186,14 +223,14 @@ void viewscreen_load_screen::feed (std::set<df::interface_key> *input)
     else if (input->count(df::interface_key::CURSOR_DOWN))
     {
         sel_idx++;
-        if (sel_idx >= save_folders.size())
+        if (sel_idx >= saves.size())
             sel_idx = 0;
     }
     else if (input->count(df::interface_key::CURSOR_UP))
     {
         sel_idx--;
         if (sel_idx < 0)
-            sel_idx = save_folders.size() - 1;
+            sel_idx = saves.size() - 1;
     }
     else if (input->count(df::interface_key::SELECT))
     {
@@ -221,7 +258,8 @@ void viewscreen_load_screen::render ()
                         (dim.x / 2) - (title.length() / 2),
                         0,
                         title);
-    auto games = save_folders;
+    //auto games = save_folders;
+    auto games = this->get_saves();
     int max_rows = (dim.y / 2) - 1;
     int row = 2, i = this->sel_offset;
     for (auto iter = games.begin() + sel_offset; iter != games.end() && row + 2 < dim.y; iter++, row += 2, i++)
@@ -239,18 +277,19 @@ void viewscreen_load_screen::render ()
         else if (save->game_type == df::game_type::DWARF_RECLAIM) fg = COLOR_MAGENTA;
         if (i == sel_idx) fg = (color_value)(fg + 8);
         color_value bg = (i == sel_idx) ? COLOR_BLUE : COLOR_BLACK;
+
         auto pen = Screen::Pen(' ', fg, bg);
         Screen::fillRect(pen, 2, row, LOAD_LIST_MAX_X, row + 1);
         Screen::paintString(pen, 2, row, save->fort_name + " - " + mode_string(save->game_type));
         Screen::paintString(pen, 3, row + 1, "Folder: " + save->folder_name);
         std::string world_name = save->world_name;
         Screen::paintString(pen, LOAD_LIST_MAX_X - world_name.length() + 1, row, world_name);
-        std::string year = "Year " + std::to_string(save->year);
-        Screen::paintString(pen, LOAD_LIST_MAX_X - year.length(), row + 1, year);
+        std::string year = std::to_string(save->year);
+        Screen::paintString(pen, LOAD_LIST_MAX_X - year.length() + 1, row + 1, year);
     }
     if (sel_offset > 0)
         OutputStringCenter(COLOR_LIGHTCYAN, 1, "\030 More \030");
-    if (sel_offset < this->save_folders.size() - max_rows && max_rows < this->save_folders.size())
+    if (sel_offset < games.size() - max_rows && max_rows < games.size())
         OutputStringCenter(COLOR_LIGHTCYAN, dim.y - 1, "\031 More \031");
     if (enabler->tracking_on && gps->mouse_x != -1 && gps->mouse_y != -1 &&
             Gui::getCurFocus() == "dfhack/loadscreen")
@@ -260,7 +299,7 @@ void viewscreen_load_screen::render ()
         if (gps->mouse_y == dim.y - 1)
         {
             this->sel_offset++;
-            this->sel_offset = std::min((int)this->save_folders.size() - max_rows + 1, this->sel_offset);
+            this->sel_offset = std::min((int)games.size() - max_rows + 1, this->sel_offset);
             scroll = true;
         }
         else if (gps->mouse_y < 2 && sel_offset > 0)
@@ -271,7 +310,7 @@ void viewscreen_load_screen::render ()
         }
         if (scroll)
         {
-            this->sel_offset = std::max(0, std::min((int)this->save_folders.size(), sel_offset));
+            this->sel_offset = std::max(0, std::min((int)games.size(), sel_offset));
             this->sel_idx = std::max(this->sel_offset, std::min(this->sel_offset + max_rows - 1, this->sel_idx));
         }
     }
@@ -280,7 +319,8 @@ void viewscreen_load_screen::render ()
 bool viewscreen_load_screen::select_game (std::string folder)
 {
     int i = 0;
-    for (auto iter = save_folders.begin(); iter != save_folders.end(); iter++, i++)
+    auto games = this->get_saves();
+    for (auto iter = games.begin(); iter != games.end(); iter++, i++)
     {
         SaveGame * save = *iter;
         if (folder == save->folder_name)
