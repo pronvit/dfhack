@@ -227,10 +227,18 @@ void viewscreen_load_screen::render ()
     for (auto iter = games.begin() + sel_offset; iter != games.end() && row + 2 < dim.y; iter++, row += 2, i++)
     {
         SaveGame * save = *iter;
+        /* Foreground colors:
+         * white: Fortress mode
+         * cyan: Adventure mode
+         * magenta: Reclaim fortress mode
+         * red: Backup
+         */
         color_value fg = COLOR_GREY;
         if (save->is_backup) fg = COLOR_RED;
+        else if (save->game_type == df::game_type::ADVENTURE_MAIN) fg = COLOR_CYAN;
+        else if (save->game_type == df::game_type::DWARF_RECLAIM) fg = COLOR_MAGENTA;
         if (i == sel_idx) fg = (color_value)(fg + 8);
-        color_value bg = (i == sel_idx) ? COLOR_GREEN : COLOR_BLACK;
+        color_value bg = (i == sel_idx) ? COLOR_BLUE : COLOR_BLACK;
         auto pen = Screen::Pen(' ', fg, bg);
         Screen::fillRect(pen, 2, row, LOAD_LIST_MAX_X, row + 1);
         Screen::paintString(pen, 2, row, save->fort_name + " - " + mode_string(save->game_type));
@@ -359,9 +367,9 @@ void viewscreen_load_options::render ()
         max_x = (dim.x + width) / 2,
         min_y = (dim.y - height) / 2,
         max_y = (dim.y + height) / 2;
-    Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_GREY), min_x, min_y, max_x, max_y);
+    Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_GREY), min_x, min_y, max_x, max_y);  // border
     Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_BLACK),
-                     min_x + 1, min_y + 1, max_x - 1, max_y - 1);
+                     min_x + 1, min_y + 1, max_x - 1, max_y - 1);  // content
     std::string title = "Load game: " + this->save->folder_name;
     Screen::paintString(Screen::Pen(' ', COLOR_BLACK, COLOR_GREY),
                         dim.x / 2 - title.length() / 2, min_y, title);
