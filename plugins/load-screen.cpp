@@ -163,7 +163,7 @@ SaveGame::SaveGame (T_saves save):
 viewscreen_load_screen::viewscreen_load_screen ():
     sel_idx(0),
     sel_offset(0),
-    flags(LG_NONE)
+    flags(LG_HIDE_BACKUPS)
 { }
 
 df::viewscreen_loadgamest* viewscreen_load_screen::parent_screen ()
@@ -236,6 +236,10 @@ void viewscreen_load_screen::feed (std::set<df::interface_key> *input)
     {
         show_options();
     }
+    else if (input->count(df::interface_key::CUSTOM_B))
+    {
+        this->flags = this->flags ^ LG_HIDE_BACKUPS;
+    }
 
     if (enabler->tracking_on && enabler->mouse_lbut)
     {
@@ -248,6 +252,7 @@ void viewscreen_load_screen::render ()
 {
     if (!save_folders.size())
         init_save_folders();
+    int x, y;
     auto dim = Screen::getWindowSize();
     df::viewscreen_loadgamest* parent = parent_screen();
     if (!parent)
@@ -259,9 +264,15 @@ void viewscreen_load_screen::render ()
                         0,
                         title);
     //auto games = save_folders;
+    sel_idx = std::min(sel_idx, (int)this->get_saves().size() - 1);
+    sel_offset = std::min(sel_offset, (int)this->get_saves().size() - 1);
     auto games = this->get_saves();
     int max_rows = (dim.y / 2) - 1;
     int row = 2, i = this->sel_offset;
+    x = 1; y = 0;
+    OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_B));
+    OutputStringX(COLOR_WHITE, x, y, (std::string)": " +
+                  (this->flags & LG_HIDE_BACKUPS ? "Show" : "Hide") + " backups");
     for (auto iter = games.begin() + sel_offset; iter != games.end() && row + 2 < dim.y; iter++, row += 2, i++)
     {
         SaveGame * save = *iter;
