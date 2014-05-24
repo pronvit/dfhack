@@ -39,8 +39,10 @@ command_result cmd_load_screen (color_ostream &out, std::vector <std::string> & 
 enum loadgame_flags
 {
     LG_NONE = 0,
-    LG_HIDE_BACKUPS = 1
+    LG_HIDE_BACKUPS = 1,
+    LG_COLOR_MODE = 2,
 };
+#define LG_DEFAULT_FLAGS (LG_HIDE_BACKUPS | LG_COLOR_MODE)
 
 inline loadgame_flags operator| (loadgame_flags a, loadgame_flags b)
 {
@@ -147,6 +149,12 @@ void OutputStringCenter (int8_t fg, int y, const std::string text)
     int x = Screen::getWindowSize().x / 2 - text.length() / 2;
     OutputString(fg, x, y, text);
 }
+void OutputCheck (int x, int y, bool value)
+{
+    color_value fg = (value) ? COLOR_LIGHTGREEN : COLOR_LIGHTRED;
+    std::string text = (value) ? "\373" : " ";
+    OutputString(fg, x, y, text);
+}
 
 std::string mode_string (df::game_type gametype)
 {
@@ -183,7 +191,7 @@ SaveGame::SaveGame (T_saves save):
 viewscreen_load_screen::viewscreen_load_screen ():
     sel_idx(0),
     sel_offset(0),
-    flags(LG_HIDE_BACKUPS)
+    flags(LG_DEFAULT_FLAGS)
 { }
 
 df::viewscreen_loadgamest* viewscreen_load_screen::parent_screen ()
@@ -260,6 +268,10 @@ void viewscreen_load_screen::feed (std::set<df::interface_key> *input)
     {
         this->flags = this->flags ^ LG_HIDE_BACKUPS;
     }
+    else if (input->count(df::interface_key::CUSTOM_C))
+    {
+        this->flags = this->flags ^ LG_COLOR_MODE;
+    }
 
     if (enabler->tracking_on && enabler->mouse_lbut)
     {
@@ -291,8 +303,12 @@ void viewscreen_load_screen::render ()
     int row = 2, i = this->sel_offset;
     x = 1; y = 0;
     OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_B));
-    OutputStringX(COLOR_WHITE, x, y, (std::string)": " +
-                  (this->flags & LG_HIDE_BACKUPS ? "Show" : "Hide") + " backups");
+    OutputStringX(COLOR_WHITE, x, y, ": Hide backups [ ]");
+    OutputCheck(x - 2, y, this->flags & LG_HIDE_BACKUPS);
+    x = 1; y++;
+    OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_C));
+    OutputStringX(COLOR_WHITE, x, y, ": Color [ ]");
+    OutputCheck(x - 2, y, this->flags & LG_COLOR_MODE);
     for (auto iter = games.begin() + sel_offset; iter != games.end() && row + 2 < dim.y; iter++, row += 2, i++)
     {
         SaveGame * save = *iter;
@@ -303,9 +319,12 @@ void viewscreen_load_screen::render ()
          * red: Backup
          */
         color_value fg = COLOR_GREY;
-        if (save->is_backup) fg = COLOR_RED;
-        else if (save->game_type == df::game_type::ADVENTURE_MAIN) fg = COLOR_CYAN;
-        else if (save->game_type == df::game_type::DWARF_RECLAIM) fg = COLOR_MAGENTA;
+        if (this->flags & LG_COLOR_MODE)
+        {
+            if (save->is_backup) fg = COLOR_RED;
+            else if (save->game_type == df::game_type::ADVENTURE_MAIN) fg = COLOR_CYAN;
+            else if (save->game_type == df::game_type::DWARF_RECLAIM) fg = COLOR_MAGENTA;
+        }
         if (i == sel_idx) fg = (color_value)(fg + 8);
         color_value bg = (i == sel_idx) ? COLOR_BLUE : COLOR_BLACK;
 
