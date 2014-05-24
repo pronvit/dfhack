@@ -106,7 +106,7 @@ public:
     viewscreen_load_options (viewscreen_load_screen * parent, SaveGame * save);
     ~viewscreen_load_options () { };
 
-    void rename_folder (std::string new_folder);
+    bool rename_folder (std::string new_folder);
     int getWidth () { return width; };
     int getHeight () { return height; };
 protected:
@@ -487,9 +487,18 @@ void viewscreen_load_options::do_load ()
     this->parent->dismiss();
 }
 
-void viewscreen_load_options::rename_folder (std::string new_folder)
+bool viewscreen_load_options::rename_folder (std::string new_folder)
 {
+    int result = rename(
+        ((std::string)"data/save/" + this->save->folder_name).c_str(),
+        ((std::string)"data/save/" + new_folder).c_str()
+    );
+    if (result)
+        return false;
     this->save->folder_name = new_folder;
+    this->save->base_folder_name = new_folder;
+    this->save->is_backup = false;
+    return true;
 }
 
 viewscreen_rename_dialog::viewscreen_rename_dialog (viewscreen_load_options * parent, SaveGame * save):
