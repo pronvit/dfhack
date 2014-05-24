@@ -574,7 +574,7 @@ void entry_dialog::render ()
         max_y = (dim.y + height) / 2;
     Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_DARKGREY), min_x, min_y, max_x, max_y);
     Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_BLACK), min_x + 1, min_y + 1, max_x - 1, max_y - 1);
-    std::string title = this->getTitle();
+    std::string title = " " + this->getTitle() + " ";
     Screen::paintString(Screen::Pen(' ', COLOR_BLACK, COLOR_GREY), (dim.x - title.length()) / 2, min_y, title);
     int x = min_x + 2,
         y = min_y + 2;
