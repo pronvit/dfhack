@@ -120,20 +120,58 @@ protected:
     bool load_flag;
 };
 
-class viewscreen_rename_dialog : public dfhack_viewscreen
+class entry_dialog : public dfhack_viewscreen
 {
 public:
     void feed (std::set<df::interface_key> *input);
     void render ();
     void help () { };
-    std::string getFocusString () { return "loadscreen/rename"; };
+    virtual std::string getFocusString () = 0;
+    entry_dialog (dfhack_viewscreen * parent);
+    ~entry_dialog () { };
+
+    std::string getEntry () { return this->entry; };
+    virtual std::string getTitle () = 0;
+    virtual std::string getPrompt () = 0;
+protected:
+    dfhack_viewscreen * parent;
+    virtual bool validate (char input) = 0;
+    virtual void close () { Screen::dismiss(this); };
+    virtual bool submit () = 0;
+    std::string entry;
+    int width;
+    int height;
+};
+
+class viewscreen_rename_dialog : public entry_dialog
+{
+public:
     viewscreen_rename_dialog (viewscreen_load_options * parent, SaveGame * save);
     ~viewscreen_rename_dialog () { };
+    std::string getFocusString () { return "loadscreen/rename"; };
+    std::string getTitle () { return "Renaming " + this->save->folder_name; };
+    std::string getPrompt () { return "New folder name:"; };
+    bool validate (char ch);
 protected:
     viewscreen_load_options * parent;
     SaveGame * save;
-    std::string entry;
+    bool submit ();
 };
+
+//class viewscreen_rename_dialog : public dfhack_viewscreen
+//{
+//public:
+//    void feed (std::set<df::interface_key> *input);
+//    void render ();
+//    void help () { };
+//    std::string getFocusString () { return "loadscreen/rename"; };
+//    viewscreen_rename_dialog (viewscreen_load_options * parent, SaveGame * save);
+//    ~viewscreen_rename_dialog () { };
+//protected:
+//    viewscreen_load_options * parent;
+//    SaveGame * save;
+//    std::string entry;
+//};
 
 void OutputString (int8_t fg, int x, int y, const std::string text)
 {
@@ -520,30 +558,28 @@ bool viewscreen_load_options::rename_folder (std::string new_folder)
     return true;
 }
 
-viewscreen_rename_dialog::viewscreen_rename_dialog (viewscreen_load_options * parent, SaveGame * save):
-    parent(parent),
-    save(save)
-{
-    this->entry = save->folder_name;
-}
+entry_dialog::entry_dialog (dfhack_viewscreen * parent):
+    parent(parent)
+{ }
 
-void viewscreen_rename_dialog::render ()
+void entry_dialog::render ()
 {
     parent->render();
-    int width = parent->getWidth(),
-        height = parent->getHeight();
     auto dim = Screen::getWindowSize();
-    int min_x = (dim.x - width) / 2,
+    int width = this->width,
+        height = this->height,
+        min_x = (dim.x - width) / 2,
         max_x = (dim.x + width) / 2,
         min_y = (dim.y - height) / 2,
         max_y = (dim.y + height) / 2;
     Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_DARKGREY), min_x, min_y, max_x, max_y);
     Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_BLACK), min_x + 1, min_y + 1, max_x - 1, max_y - 1);
-    std::string title = " Renaming " + this->save->folder_name + " ";
+    std::string title = this->getTitle();
     Screen::paintString(Screen::Pen(' ', COLOR_BLACK, COLOR_GREY), (dim.x - title.length()) / 2, min_y, title);
     int x = min_x + 2,
         y = min_y + 2;
-    OutputString(COLOR_WHITE, x, y, "New folder name:");
+    std::string prompt = this->getPrompt();
+    OutputString(COLOR_WHITE, x, y, prompt);
     y += 2;
     color_value text_fg = (this->entry.length() >= width - 4) ? COLOR_LIGHTRED : COLOR_WHITE;
     OutputStringX(text_fg, x, y, this->entry);
@@ -553,7 +589,7 @@ void viewscreen_rename_dialog::render ()
     OutputStringX(COLOR_WHITE, x, y, ": Clear");
 }
 
-void viewscreen_rename_dialog::feed (std::set<df::interface_key> * input)
+void entry_dialog::feed (std::set<df::interface_key> *input)
 {
     int ascii_offset = df::interface_key::STRING_A048 - '0';
     for (auto iter = input->begin(); iter != input->end(); iter++)
@@ -561,30 +597,25 @@ void viewscreen_rename_dialog::feed (std::set<df::interface_key> * input)
         df::interface_key key = *iter;
         if (key == df::interface_key::LEAVESCREEN)
         {
-            Screen::dismiss(this);
+            this->close();
         }
-        else if (key == df::interface_key::SELECT && this->entry.length())
+        else if (key == df::interface_key::SELECT)
         {
-            this->parent->rename_folder(this->entry);
-            Screen::dismiss(this);
-        }
-        else if (key == df::interface_key::STRING_A000)
-        {
-            if (this->entry.length() > 0)
-                this->entry = this->entry.erase(this->entry.length() - 1);
-        }
-        else if (
-                //key >= df::interface_key::STRING_A032 && key <= df::interface_key::STRING_A126
-                (key == DF_CHAR(045)) ||                            // -
-                (key == DF_CHAR(095)) ||                            // _
-                (key >= DF_CHAR(048) && key <= DF_CHAR(057)) ||     // 0-9
-                (key >= DF_CHAR(065) && key <= DF_CHAR(090)) ||     // A-Z
-                (key >= DF_CHAR(097) && key <= DF_CHAR(122))        // a-z
-        )
-        {
-            if (this->entry.length() < (this->parent->getWidth() - 4))
+            if (this->submit())
             {
-                this->entry += key - ascii_offset;
+                this->close();
+            }
+        }
+        else if (key == DF_CHAR(000) && this->entry.length() > 0)
+        {
+            this->entry = this->entry.erase(this->entry.length() - 1);
+        }
+        else if (key >= DF_CHAR(032) && key <= DF_CHAR(126))
+        {
+            char ch = key - ascii_offset;
+            if (this->validate(ch))
+            {
+                this->entry += ch;
             }
         }
         else if (key == df::interface_key::CUSTOM_ALT_C)
@@ -592,6 +623,40 @@ void viewscreen_rename_dialog::feed (std::set<df::interface_key> * input)
             this->entry = "";
         }
     }
+}
+
+viewscreen_rename_dialog::viewscreen_rename_dialog (viewscreen_load_options * parent, SaveGame * save):
+    entry_dialog(parent),
+    parent(parent),
+    save(save)
+{
+    this->entry = save->folder_name;
+    this->width = parent->getWidth();
+    this->height = parent->getHeight();
+}
+
+bool viewscreen_rename_dialog::submit ()
+{
+    if (this->entry.length() > 0)
+    {
+        if (this->parent->rename_folder(this->entry))
+            return true;
+    }
+    return false;
+}
+
+bool viewscreen_rename_dialog::validate (char ch)
+{
+    if (ch == '-' ||
+        ch == '_' ||
+        (ch >= '0' && ch <= '9') ||
+        (ch >= 'A' && ch <= 'Z') ||
+        (ch >= 'a' && ch <= 'z')
+    )
+    {
+        return true;
+    }
+    return false;
 }
 
 struct loadgame_hooks : df::viewscreen_loadgamest
