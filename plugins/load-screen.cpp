@@ -117,7 +117,7 @@ protected:
     int width;
     int height;
     void do_load ();
-    bool load_flag;
+    int load_flag;
 };
 
 class entry_dialog : public dfhack_viewscreen
@@ -441,7 +441,7 @@ viewscreen_load_options::viewscreen_load_options (viewscreen_load_screen * paren
     parent(parent),
     save(save),
     width(42),
-    load_flag(false)
+    load_flag(0)
 { }
 
 void viewscreen_load_options::feed (std::set<df::interface_key> *input)
@@ -452,7 +452,7 @@ void viewscreen_load_options::feed (std::set<df::interface_key> *input)
     }
     else if (input->count(df::interface_key::SELECT))
     {
-        this->load_flag = true;
+        this->load_flag = 2;
     }
     else if (input->count(df::interface_key::CUSTOM_U))
     {
@@ -475,7 +475,8 @@ void viewscreen_load_options::render ()
     {
         Screen::clear();
         OutputString(COLOR_WHITE, 2, 2, "Loading game...");
-        do_load();
+        if (!--load_flag)
+            do_load();
         return;
     }
 
