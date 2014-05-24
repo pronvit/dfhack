@@ -18,6 +18,7 @@
 #include "df/viewscreen_loadgamest.h"
 
 #define LOAD_LIST_MAX_X 77
+#define DF_CHAR(char) df::interface_key::STRING_A##char
 
 using namespace DFHack;
 
@@ -79,7 +80,7 @@ public:
     void feed (std::set<df::interface_key> *input);
     void render ();
     void help () { };
-    std::string getFocusString() { return "loadscreen"; };
+    std::string getFocusString () { return "loadscreen"; };
 
     df::viewscreen_loadgamest* parent_screen ();
     void dismiss ();
@@ -101,9 +102,13 @@ public:
     void feed (std::set<df::interface_key> *input);
     void render ();
     void help () { };
-    std::string getFocusString() { return "loadscreen/options"; };
+    std::string getFocusString () { return "loadscreen/options"; };
     viewscreen_load_options (viewscreen_load_screen * parent, SaveGame * save);
     ~viewscreen_load_options () { };
+
+    void rename_folder (std::string new_folder);
+    int getWidth () { return width; };
+    int getHeight () { return height; };
 protected:
     viewscreen_load_screen * parent;
     SaveGame * save;
@@ -111,6 +116,21 @@ protected:
     int height;
     void do_load ();
     bool load_flag;
+};
+
+class viewscreen_rename_dialog : public dfhack_viewscreen
+{
+public:
+    void feed (std::set<df::interface_key> *input);
+    void render ();
+    void help () { };
+    std::string getFocusString () { return "loadscreen/rename"; };
+    viewscreen_rename_dialog (viewscreen_load_options * parent, SaveGame * save);
+    ~viewscreen_rename_dialog () { };
+protected:
+    viewscreen_load_options * parent;
+    SaveGame * save;
+    std::string entry;
 };
 
 void OutputString (int8_t fg, int x, int y, const std::string text)
@@ -364,7 +384,6 @@ viewscreen_load_options::viewscreen_load_options (viewscreen_load_screen * paren
     parent(parent),
     save(save),
     width(42),
-    height(7),
     load_flag(false)
 { }
 
@@ -386,6 +405,11 @@ void viewscreen_load_options::feed (std::set<df::interface_key> *input)
             this->parent->select_game(this->save->base_folder_name);
         }
     }
+    else if (input->count(df::interface_key::CUSTOM_R))
+    {
+        viewscreen_rename_dialog * dialog = new viewscreen_rename_dialog(this, this->save);
+        Screen::show(dialog);
+    }
 }
 
 void viewscreen_load_options::render ()
@@ -402,7 +426,7 @@ void viewscreen_load_options::render ()
     std::string play_now_label =  ": Play now";
     std::string is_backup_warning, is_backup_warning2;
 
-    height = 7;
+    height = 8;
     if (this->save->is_backup)
     {
         height += 3;
@@ -418,10 +442,11 @@ void viewscreen_load_options::render ()
         max_x = (dim.x + width) / 2,
         min_y = (dim.y - height) / 2,
         max_y = (dim.y + height) / 2;
-    Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_GREY), min_x, min_y, max_x, max_y);  // border
+    y = max_y - (height - 2);
+    Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_DARKGREY), min_x, min_y, max_x, max_y);  // border
     Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_BLACK),
                      min_x + 1, min_y + 1, max_x - 1, max_y - 1);  // content
-    std::string title = "Load game: " + this->save->folder_name;
+    std::string title = " Load game: " + this->save->folder_name + " ";
     Screen::paintString(Screen::Pen(' ', COLOR_BLACK, COLOR_GREY),
                         dim.x / 2 - title.length() / 2, min_y, title);
     if (this->save->is_backup)
@@ -433,16 +458,19 @@ void viewscreen_load_options::render ()
         y++;
         OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_U));
         OutputStringX(COLOR_LIGHTGREEN, x, y, ": Use " + this->save->base_folder_name);
+        y++;
     }
     x = min_x + 2;
-    y = max_y - 5;
     OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_B));
     OutputStringX(COLOR_WHITE, x, y, ": Load from backup");
     x = min_x + 2; y++;
     OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_D));
     OutputStringX(COLOR_WHITE, x, y, ": Delete old backups");
     x = min_x + 2; y++;
+    OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_R));
+    OutputStringX(COLOR_WHITE, x, y, ": Rename");
 
+    x = min_x + 2; y++;
     x = max_x - 1 - play_now_label.length() - Screen::getKeyDisplay(df::interface_key::SELECT).length();
     y++;
     OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::SELECT));
@@ -457,6 +485,85 @@ void viewscreen_load_options::do_load ()
     this->parent->load_game(save->folder_name);
     Screen::dismiss(this);
     this->parent->dismiss();
+}
+
+void viewscreen_load_options::rename_folder (std::string new_folder)
+{
+    this->save->folder_name = new_folder;
+}
+
+viewscreen_rename_dialog::viewscreen_rename_dialog (viewscreen_load_options * parent, SaveGame * save):
+    parent(parent),
+    save(save)
+{
+    this->entry = save->folder_name;
+}
+
+void viewscreen_rename_dialog::render ()
+{
+    parent->render();
+    int width = parent->getWidth(),
+        height = parent->getHeight();
+    auto dim = Screen::getWindowSize();
+    int min_x = (dim.x - width) / 2,
+        max_x = (dim.x + width) / 2,
+        min_y = (dim.y - height) / 2,
+        max_y = (dim.y + height) / 2;
+    Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_DARKGREY), min_x, min_y, max_x, max_y);
+    Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_BLACK), min_x + 1, min_y + 1, max_x - 1, max_y - 1);
+    std::string title = " Renaming " + this->save->folder_name + " ";
+    Screen::paintString(Screen::Pen(' ', COLOR_BLACK, COLOR_GREY), (dim.x - title.length()) / 2, min_y, title);
+    int x = min_x + 2,
+        y = min_y + 2;
+    OutputString(COLOR_WHITE, x, y, "New folder name:");
+    y += 2;
+    color_value text_fg = (this->entry.length() >= width - 4) ? COLOR_LIGHTRED : COLOR_WHITE;
+    OutputStringX(text_fg, x, y, this->entry);
+    OutputStringX(COLOR_LIGHTCYAN, x, y, "_");
+    x = min_x + 2; y = max_y - 2;
+    OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_ALT_C));
+    OutputStringX(COLOR_WHITE, x, y, ": Clear");
+}
+
+void viewscreen_rename_dialog::feed (std::set<df::interface_key> * input)
+{
+    int ascii_offset = df::interface_key::STRING_A048 - '0';
+    for (auto iter = input->begin(); iter != input->end(); iter++)
+    {
+        df::interface_key key = *iter;
+        if (key == df::interface_key::LEAVESCREEN)
+        {
+            Screen::dismiss(this);
+        }
+        else if (key == df::interface_key::SELECT && this->entry.length())
+        {
+            this->parent->rename_folder(this->entry);
+            Screen::dismiss(this);
+        }
+        else if (key == df::interface_key::STRING_A000)
+        {
+            if (this->entry.length() > 0)
+                this->entry = this->entry.erase(this->entry.length() - 1);
+        }
+        else if (
+                //key >= df::interface_key::STRING_A032 && key <= df::interface_key::STRING_A126
+                (key == DF_CHAR(045)) ||                            // -
+                (key == DF_CHAR(095)) ||                            // _
+                (key >= DF_CHAR(048) && key <= DF_CHAR(057)) ||     // 0-9
+                (key >= DF_CHAR(065) && key <= DF_CHAR(090)) ||     // A-Z
+                (key >= DF_CHAR(097) && key <= DF_CHAR(122))        // a-z
+        )
+        {
+            if (this->entry.length() < (this->parent->getWidth() - 4))
+            {
+                this->entry += key - ascii_offset;
+            }
+        }
+        else if (key == df::interface_key::CUSTOM_ALT_C)
+        {
+            this->entry = "";
+        }
+    }
 }
 
 struct loadgame_hooks : df::viewscreen_loadgamest
