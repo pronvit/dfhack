@@ -88,13 +88,14 @@ public:
     void dismiss ();
     bool select_game (std::string folder);
     bool load_game (std::string folder);
+    std::vector<SaveGame*> get_saves () { return get_saves(true); };
+    std::vector<SaveGame*> get_saves (bool restrict);
 protected:
     int sel_idx;
     int sel_offset;
     std::vector<SaveGame*> save_folders;
     void init_save_folders ();
     void show_options ();
-    std::vector<SaveGame*> get_saves ();
     bool mouse_select_save (int x, int y);
 };
 
@@ -118,6 +119,26 @@ protected:
     int height;
     void do_load ();
     int load_flag;
+};
+
+class viewscreen_backup_browse : public dfhack_viewscreen
+{
+public:
+    void feed (std::set<df::interface_key> *input);
+    void render ();
+    void help () { };
+    std::string getFocusString () { return "loadscreen/backups"; };
+    viewscreen_backup_browse (viewscreen_load_options * parent,
+                              SaveGame * save,
+                              std::vector<SaveGame*> save_folders);
+    ~viewscreen_backup_browse () { };
+protected:
+    viewscreen_load_options * parent;
+    SaveGame * save;
+    std::vector<SaveGame*> save_folders;
+    std::vector<SaveGame*> get_choices ();
+    int sel_idx;
+    int page_size;
 };
 
 class entry_dialog : public dfhack_viewscreen
@@ -157,21 +178,6 @@ protected:
     SaveGame * save;
     bool submit ();
 };
-
-//class viewscreen_rename_dialog : public dfhack_viewscreen
-//{
-//public:
-//    void feed (std::set<df::interface_key> *input);
-//    void render ();
-//    void help () { };
-//    std::string getFocusString () { return "loadscreen/rename"; };
-//    viewscreen_rename_dialog (viewscreen_load_options * parent, SaveGame * save);
-//    ~viewscreen_rename_dialog () { };
-//protected:
-//    viewscreen_load_options * parent;
-//    SaveGame * save;
-//    std::string entry;
-//};
 
 void OutputString (int8_t fg, int x, int y, const std::string text)
 {
@@ -250,13 +256,16 @@ void viewscreen_load_screen::init_save_folders ()
     }
 }
 
-std::vector<SaveGame*> viewscreen_load_screen::get_saves ()
+std::vector<SaveGame*> viewscreen_load_screen::get_saves (bool restrict)
 {
     std::vector<SaveGame*> saves;
     for (auto iter = this->save_folders.begin(); iter != this->save_folders.end(); iter++)
     {
         SaveGame * save = *iter;
-        if (save->is_backup && this->flags & LG_HIDE_BACKUPS) continue;
+        if (restrict)
+        {
+            if (save->is_backup && this->flags & LG_HIDE_BACKUPS) continue;
+        }
         saves.push_back(save);
     }
     return saves;
@@ -306,10 +315,6 @@ void viewscreen_load_screen::feed (std::set<df::interface_key> *input)
     {
         this->flags = this->flags ^ LG_HIDE_BACKUPS;
     }
-    else if (input->count(df::interface_key::CUSTOM_C))
-    {
-        this->flags = this->flags ^ LG_COLOR_MODE;
-    }
 
     if (enabler->tracking_on && enabler->mouse_lbut)
     {
@@ -333,7 +338,6 @@ void viewscreen_load_screen::render ()
                         (dim.x / 2) - (title.length() / 2),
                         0,
                         title);
-    //auto games = save_folders;
     sel_idx = std::min(sel_idx, (int)this->get_saves().size() - 1);
     sel_offset = std::min(sel_offset, (int)this->get_saves().size() - 1);
     auto games = this->get_saves();
@@ -344,9 +348,6 @@ void viewscreen_load_screen::render ()
     OutputStringX(COLOR_WHITE, x, y, ": Hide backups [ ]");
     OutputCheck(x - 2, y, this->flags & LG_HIDE_BACKUPS);
     x = 1; y++;
-    OutputStringX(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_C));
-    OutputStringX(COLOR_WHITE, x, y, ": Color [ ]");
-    OutputCheck(x - 2, y, this->flags & LG_COLOR_MODE);
     for (auto iter = games.begin() + sel_offset; iter != games.end() && row + 2 < dim.y; iter++, row += 2, i++)
     {
         SaveGame * save = *iter;
@@ -467,6 +468,11 @@ void viewscreen_load_options::feed (std::set<df::interface_key> *input)
         viewscreen_rename_dialog * dialog = new viewscreen_rename_dialog(this, this->save);
         Screen::show(dialog);
     }
+    else if (input->count(df::interface_key::CUSTOM_B))
+    {
+        viewscreen_backup_browse * screen = new viewscreen_backup_browse(this, this->save, parent->get_saves(false));
+        Screen::show(screen);
+    }
 }
 
 void viewscreen_load_options::render ()
@@ -557,6 +563,76 @@ bool viewscreen_load_options::rename_folder (std::string new_folder)
     this->save->base_folder_name = new_folder;
     this->save->is_backup = false;
     return true;
+}
+
+viewscreen_backup_browse::viewscreen_backup_browse (viewscreen_load_options * parent,
+                                                    SaveGame * save,
+                                                    std::vector<SaveGame*> save_folders):
+    parent(parent),
+    save(save),
+    save_folders(save_folders),
+    sel_idx(0),
+    page_size(10)
+{ }
+std::vector<SaveGame*> viewscreen_backup_browse::get_choices ()
+{
+    std::vector<SaveGame*> choices;
+    for (auto iter = this->save_folders.begin(); iter != this->save_folders.end(); iter++)
+    {
+        SaveGame * save = *iter;
+        if (save->base_folder_name == this->save->folder_name &&
+            save->folder_name != this->save->folder_name)
+        {
+            choices.push_back(save);
+        }
+    }
+    sel_idx = std::max(0, sel_idx);
+    sel_idx = std::min(sel_idx, (int)choices.size() - 1);
+    return choices;
+}
+
+void viewscreen_backup_browse::feed (std::set<df::interface_key> *input)
+{
+    if (input->count(df::interface_key::LEAVESCREEN) ||
+        !get_choices().size() /* Dismiss if empty */)
+    {
+        Screen::dismiss(this);
+    }
+    else if (input->count(df::interface_key::CURSOR_UP))
+    {
+        sel_idx--;
+        if (sel_idx < 0)
+            sel_idx = get_choices().size() - 1;
+    }
+    else if (input->count(df::interface_key::CURSOR_DOWN))
+    {
+        sel_idx++;
+        if (sel_idx >= get_choices().size())
+            sel_idx = 0;
+    }
+}
+void viewscreen_backup_browse::render ()
+{
+    int x = 2, y = 2;
+    std::vector<SaveGame*> choices = this->get_choices();
+    auto dim = Screen::getWindowSize();
+    page_size = dim.y - 4;
+    Screen::fillRect(Screen::Pen(' ', COLOR_BLACK, COLOR_BLACK), 0, 0, dim.x - 1, dim.y - 1);
+    Screen::drawBorder(" " + this->save->folder_name + ": Restore from backup ");
+    if (!choices.size())
+    {
+        OutputString(COLOR_LIGHTRED, x, y, "No backups found!");
+        return;
+    }
+    int offset = (sel_idx / page_size) * page_size,
+        i = offset;
+    for (auto iter = choices.begin() + offset; iter != choices.end() && i < offset + page_size; iter++, i++)
+    {
+        SaveGame * backup = *iter;
+        color_value fg = (sel_idx == i) ? COLOR_WHITE : COLOR_GREY;
+        OutputString(fg, x, y, backup->folder_name);
+        y++;
+    }
 }
 
 entry_dialog::entry_dialog (dfhack_viewscreen * parent):
