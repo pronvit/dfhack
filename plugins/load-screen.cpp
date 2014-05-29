@@ -4,7 +4,6 @@
 #include "Export.h"
 #include "PluginManager.h"
 
-#include <regex>
 #include <set>
 
 #include <modules/Gui.h>
