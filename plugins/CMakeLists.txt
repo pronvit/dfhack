@@ -167,6 +167,11 @@ if (BUILD_SUPPORTED)
     DFHACK_PLUGIN(building-hacks building-hacks.cpp LINK_LIBRARIES lua)
 endif()
 
+OPTION(BUILD_DFTERM3_PLUGINS OFF)
+if(BUILD_DFTERM3_PLUGINS)
+    add_subdirectory(dfterm3-plugins)
+endif()
+
 # this is the skeleton plugin. If you want to make your own, make a copy and then change it
 OPTION(BUILD_SKELETON "Build the skeleton plugin." OFF)
 if(BUILD_SKELETON)
