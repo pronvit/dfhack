@@ -16,6 +16,7 @@
 #include "lapi.h"
 #include "ldebug.h"
 #include "ldo.h"
+#include "lfs.h"
 #include "lfunc.h"
 #include "lgc.h"
 #include "lmem.h"

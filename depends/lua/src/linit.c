@@ -45,6 +45,7 @@ static const luaL_Reg loadedlibs[] = {
 ** these libs are preloaded and must be required before used
 */
 static const luaL_Reg preloadedlibs[] = {
+  {LUA_LFSLIBNAME, luaopen_lfs},
   {NULL, NULL}
 };
 
