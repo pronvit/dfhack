@@ -20,7 +20,7 @@
 
 #include "lualib.h"
 #include "lauxlib.h"
-
+#include "lfs.c"
 
 /*
 ** these libs are loaded by lua.c and are readily available to any Lua
@@ -45,7 +45,6 @@ static const luaL_Reg loadedlibs[] = {
 ** these libs are preloaded and must be required before used
 */
 static const luaL_Reg preloadedlibs[] = {
-  {LUA_LFSLIBNAME, luaopen_lfs},
   {NULL, NULL}
 };
 
