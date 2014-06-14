@@ -88,7 +88,6 @@ distribution.
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
-#include <lfs.c>
 
 using namespace DFHack;
 using namespace DFHack::LuaWrapper;
@@ -2268,5 +2267,4 @@ void OpenDFHackApi(lua_State *state)
     OpenModule(state, "constructions", dfhack_constructions_module);
     OpenModule(state, "screen", dfhack_screen_module, dfhack_screen_funcs);
     OpenModule(state, "internal", dfhack_internal_module, dfhack_internal_funcs);
-    OpenModule(state, "fs", NULL, fslib);
 }

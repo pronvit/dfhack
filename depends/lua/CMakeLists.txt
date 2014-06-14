@@ -22,6 +22,7 @@ include/lcode.h
 include/lctype.h
 include/ldebug.h
 include/ldo.h
+include/lfs.h
 include/lfunc.h
 include/lgc.h
 include/llex.h
@@ -57,6 +58,7 @@ src/ldblib.c
 src/ldebug.c
 src/ldo.c
 src/ldump.c
+src/lfs.c
 src/lfunc.c
 src/lgc.c
 src/linit.c
