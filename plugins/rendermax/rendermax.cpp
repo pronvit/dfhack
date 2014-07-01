@@ -330,6 +330,8 @@ static command_result rendermax(color_ostream &out, vector <string> & parameters
         out.printerr("Sorry, this plugin needs open gl enabled printmode. Try STANDARD or other non-2D\n");
         return CR_FAILURE;
     }
+    CoreSuspender suspend;
+    df::global::gps->force_full_display_count++;
     string cmd=parameters[0];
     if(cmd=="trippy")
     {
@@ -450,10 +452,10 @@ static command_result rendermax(color_ostream &out, vector <string> & parameters
             out.print("%s\n","Not installed, doing nothing.");
         else
             removeOld();
-        CoreSuspender guard;
-        df::global::gps->force_full_display_count++;
         return CR_OK;
     }
+    // No change to renderer
+    df::global::gps->force_full_display_count--;
     return CR_WRONG_USAGE;
 }
 
