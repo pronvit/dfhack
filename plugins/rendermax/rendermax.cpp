@@ -30,7 +30,7 @@ using std::vector;
 using std::string;
 enum RENDERER_MODE
 {
-    MODE_DEFAULT,MODE_TRIPPY,MODE_TRUECOLOR,MODE_LUA,MODE_LIGHT
+    MODE_DEFAULT,MODE_TRIPPY,MODE_TRUECOLOR,MODE_GREYSCALE,MODE_LUA,MODE_LIGHT
 };
 RENDERER_MODE current_mode=MODE_DEFAULT;
 lightingEngine *engine=NULL;
@@ -45,6 +45,7 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
     commands.push_back(PluginCommand(
         "rendermax", "switch rendering engine.", rendermax, false,
         "  rendermax trippy\n"
+        "  rendermax greyscale\n"
         "  rendermax truecolor red|green|blue|white\n"
         "  rendermax lua\n"
         "  rendermax light - lighting engine\n"
@@ -334,6 +335,12 @@ static command_result rendermax(color_ostream &out, vector <string> & parameters
     {
         removeOld();
         installNew(new renderer_trippy(df::global::enabler->renderer),MODE_TRIPPY);
+        return CR_OK;
+    }
+    else if(cmd=="greyscale")
+    {
+        removeOld();
+        installNew(new renderer_greyscale(df::global::enabler->renderer),MODE_GREYSCALE);
         return CR_OK;
     }
     else if(cmd=="truecolor")

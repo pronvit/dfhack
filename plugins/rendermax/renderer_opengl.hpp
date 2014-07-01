@@ -188,6 +188,54 @@ public:
     };
 };
 
+struct renderer_greyscale : public renderer_wrap {
+private:
+    void colorizeTile(int x,int y)
+    {
+        const int tile = x*(df::global::gps->dimy) + y;
+        old_opengl* p=reinterpret_cast<old_opengl*>(parent);
+        float *fg = p->fg + tile * 4 * 6;
+        float *bg = p->bg + tile * 4 * 6;
+        float *tex = p->tex + tile * 2 * 6;
+        const float val=1/2.0;
+        
+        float r = *(fg);
+        float g = *(fg + 1);
+        float b = *(fg + 2);
+        float new_fg = (r + g + b) / 3.0;
+
+        float backr = *(bg);
+        float backg = *(bg + 1);
+        float backb = *(bg + 2);
+        float new_bg = (backr + backg + backb) / 3.0;
+        for (int i = 0; i < 6; i++) {
+            *(fg++) = new_fg;
+            *(fg++) = new_fg;
+            *(fg++) = new_fg;
+            *(fg++) = 1;
+
+            *(bg++) = new_bg;
+            *(bg++) = new_bg;
+            *(bg++) = new_bg;
+            *(bg++) = 1;
+        }
+    }
+public:
+    renderer_greyscale(renderer* parent):renderer_wrap(parent)
+    {
+    }
+    virtual void update_tile(int32_t x, int32_t y) { 
+        renderer_wrap::update_tile(x,y);
+        colorizeTile(x,y);
+    };
+    virtual void update_all() { 
+        renderer_wrap::update_all();
+        for (int x = 0; x < df::global::gps->dimx; x++)
+            for (int y = 0; y < df::global::gps->dimy; y++)
+                colorizeTile(x,y);
+    };
+};
+
 struct rgbf
 {
     float r,g,b;
