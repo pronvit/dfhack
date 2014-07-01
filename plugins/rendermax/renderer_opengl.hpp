@@ -222,8 +222,7 @@ private:
     }
 public:
     renderer_greyscale(renderer* parent):renderer_wrap(parent)
-    {
-    }
+    { }
     virtual void update_tile(int32_t x, int32_t y) { 
         renderer_wrap::update_tile(x,y);
         colorizeTile(x,y);
@@ -384,6 +383,89 @@ struct rgba
 {
     float r,g,b,a;
 };
+
+struct renderer_blur : public renderer_wrap {
+private:
+    void colorizeTile(int x,int y)
+    {
+        //std::cout << "colorizeTile" << std::endl;
+        const int tile = x*(df::global::gps->dimy) + y;
+        //printf("tile: %i, fg_grid.size: %i\n", tile, fg_grid.size()); std::cout.flush();
+        //printf("fg (%f, %f, %f)\n", fg_grid[tile].r, fg_grid[tile].g, fg_grid[tile].b); std::cout.flush();
+        old_opengl* p=reinterpret_cast<old_opengl*>(parent);
+        float *fg = p->fg + tile * 4 * 6;
+        float *bg = p->bg + tile * 4 * 6;
+        float *tex = p->tex + tile * 2 * 6;
+        //const float val=1/2.0;
+        //printf("line %i\n", __LINE__); std::cout.flush();
+        //std::cout << *(fg) << std::endl;
+        float new_fg_r = (*(fg + 0) + (fg_grid[tile].r * 2)) / 3.0;
+        float new_fg_g = (*(fg + 1) + (fg_grid[tile].g * 2)) / 3.0;
+        float new_fg_b = (*(fg + 2) + (fg_grid[tile].b * 2)) / 3.0;
+        float new_bg_r = (*(bg + 0) + (bg_grid[tile].r * 2)) / 3.0;
+        float new_bg_g = (*(bg + 1) + (bg_grid[tile].g * 2)) / 3.0;
+        float new_bg_b = (*(bg + 2) + (bg_grid[tile].b * 2)) / 3.0;
+        //printf("line %i\n", __LINE__);
+        for (int i = 0; i < 6; i++) {
+            //printf("line %i\n", __LINE__); std::cout.flush();
+            *(fg++) = new_fg_r;
+            *(fg++) = new_fg_g;
+            *(fg++) = new_fg_b;
+            *(fg++) = 1;
+            //printf("line %i\n", __LINE__); std::cout.flush();
+
+            *(bg++) = new_bg_r;
+            *(bg++) = new_bg_g;
+            *(bg++) = new_bg_b;
+            *(bg++) = 1;
+        }
+        //printf("line %i\n", __LINE__); std::cout.flush();
+        //printf("fg (%f, %f, %f)\n", fg_grid[tile].r, fg_grid[tile].g, fg_grid[tile].b); std::cout.flush();
+        fg_grid[tile].r = new_fg_r;
+        fg_grid[tile].g = new_fg_g;
+        fg_grid[tile].b = new_fg_b;
+        bg_grid[tile].r = new_bg_r;
+        bg_grid[tile].g = new_bg_g;
+        bg_grid[tile].b = new_bg_b;
+        //printf("line %i\n", __LINE__); std::cout.flush();
+    }
+    void reinitGrids(int w,int h)
+    {
+        tthread::lock_guard<tthread::fast_mutex> guard(dataMutex);
+        fg_grid.resize(w*h);
+        bg_grid.resize(w*h);
+    }
+    void reinitGrids()
+    {
+        reinitGrids(df::global::gps->dimy, df::global::gps->dimx);
+    }
+public:
+    tthread::fast_mutex dataMutex;
+    std::vector<rgbf> fg_grid, bg_grid;
+    renderer_blur(renderer* parent):renderer_wrap(parent)
+    {
+        reinitGrids();
+    }
+    virtual void update_tile(int32_t x, int32_t y) { 
+        renderer_wrap::update_tile(x,y);
+        colorizeTile(x,y);
+    };
+    virtual void update_all() { 
+        renderer_wrap::update_all();
+        for (int x = 0; x < df::global::gps->dimx; x++)
+            for (int y = 0; y < df::global::gps->dimy; y++)
+                colorizeTile(x,y);
+    };
+    virtual void grid_resize(int32_t w, int32_t h) {
+        renderer_wrap::grid_resize(w,h);
+        reinitGrids(w,h);
+    };
+    virtual void resize(int32_t w, int32_t h) {
+        renderer_wrap::resize(w,h);
+        reinitGrids(w,h);
+    }
+};
+
 struct renderer_lua : public renderer_wrap {
 private:
     void overwriteTile(int x,int y)

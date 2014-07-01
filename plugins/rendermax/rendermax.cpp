@@ -30,7 +30,7 @@ using std::vector;
 using std::string;
 enum RENDERER_MODE
 {
-    MODE_DEFAULT,MODE_TRIPPY,MODE_TRUECOLOR,MODE_GREYSCALE,MODE_LUA,MODE_LIGHT
+    MODE_DEFAULT,MODE_TRIPPY,MODE_TRUECOLOR,MODE_GREYSCALE,MODE_BLUR,MODE_LUA,MODE_LIGHT
 };
 RENDERER_MODE current_mode=MODE_DEFAULT;
 lightingEngine *engine=NULL;
@@ -339,10 +339,16 @@ static command_result rendermax(color_ostream &out, vector <string> & parameters
         installNew(new renderer_trippy(df::global::enabler->renderer),MODE_TRIPPY);
         return CR_OK;
     }
-    else if(cmd=="greyscale")
+    else if(cmd=="greyscale" || cmd=="grayscale")
     {
         removeOld();
         installNew(new renderer_greyscale(df::global::enabler->renderer),MODE_GREYSCALE);
+        return CR_OK;
+    }
+    else if(cmd=="blur")
+    {
+        removeOld();
+        installNew(new renderer_blur(df::global::enabler->renderer),MODE_BLUR);
         return CR_OK;
     }
     else if(cmd=="truecolor")
