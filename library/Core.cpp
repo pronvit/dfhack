@@ -854,6 +854,9 @@ static void run_dfhack_init(color_ostream &out, Core *core)
         core->runCommand(out, "gui/no-dfhack-init");
         core->loadScriptFile(out, "dfhack.init-example", true);
     }
+#ifdef DFHACK_PRERELEASE
+    core->runCommand(out, "gui/prerelease-warning");
+#endif
 }
 
 // Load dfhack.init in a dedicated thread (non-interactive console mode)

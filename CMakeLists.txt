@@ -59,10 +59,11 @@ endif()
 
 # set up versioning.
 set(DF_VERSION "0.40.05")
-SET(DFHACK_RELEASE "r0" CACHE STRING "Current release revision.")
+SET(DFHACK_RELEASE "r0.1" CACHE STRING "Current release revision.")
 
 set(DFHACK_VERSION "${DF_VERSION}-${DFHACK_RELEASE}")
 add_definitions(-DDFHACK_VERSION="${DFHACK_VERSION}")
+add_definitions(-DDFHACK_PRERELEASE)
 
 ## where to install things (after the build is done, classic 'make install' or package structure)
 # the dfhack libraries will be installed here:
