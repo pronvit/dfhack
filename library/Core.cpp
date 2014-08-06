@@ -848,15 +848,15 @@ static void run_dfhack_init(color_ostream &out, Core *core)
         out.printerr("Key globals are missing, skipping loading dfhack.init.\n");
         return;
     }
+#ifdef DFHACK_PRERELEASE
+    core->runCommand(out, "gui/prerelease-warning");
+#endif
 
     if (!core->loadScriptFile(out, "dfhack.init", true))
     {
         core->runCommand(out, "gui/no-dfhack-init");
         core->loadScriptFile(out, "dfhack.init-example", true);
     }
-#ifdef DFHACK_PRERELEASE
-    core->runCommand(out, "gui/prerelease-warning");
-#endif
 }
 
 // Load dfhack.init in a dedicated thread (non-interactive console mode)
