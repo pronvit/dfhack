@@ -850,6 +850,14 @@ static void run_dfhack_init(color_ostream &out, Core *core)
     }
 #ifdef DFHACK_PRERELEASE
     core->runCommand(out, "gui/prerelease-warning");
+    if (Gui::getCurFocus() != "dfhack/lua/MessageBox")
+    {
+        out.color(COLOR_LIGHTMAGENTA);
+        out.print("gui/prerelease-warning failed!");
+        out.color(COLOR_RESET);
+        out.print("\n");
+        core->runCommand(out, "die");
+    }
 #endif
 
     if (!core->loadScriptFile(out, "dfhack.init", true))
