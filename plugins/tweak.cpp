@@ -115,10 +115,6 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
         "  tweak stable-cursor [disable]\n"
         "    Keeps exact position of dwarfmode cursor during exits to main menu.\n"
         "    E.g. allows switching between t/q/k/d without losing position.\n"
-        "  tweak patrol-duty [disable]\n"
-        "    Causes 'Train' orders to no longer be considered 'patrol duty' so\n"
-        "    soldiers will stop getting unhappy thoughts. Does NOT fix the problem\n"
-        "    when soldiers go off-duty (i.e. civilian).\n"
         "  tweak readable-build-plate [disable]\n"
         "    Fixes rendering of creature weight limits in pressure plate build menu.\n"
         "  tweak confirm-embark [disable]\n"
@@ -289,18 +285,6 @@ struct stable_cursor_hook : df::viewscreen_dwarfmodest
 };
 
 IMPLEMENT_VMETHOD_INTERPOSE(stable_cursor_hook, feed);
-
-struct patrol_duty_hook : df::squad_order_trainst
-{
-    typedef df::squad_order_trainst interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(bool, isPatrol, ())
-    {
-        return false;
-    }
-};
-
-IMPLEMENT_VMETHOD_INTERPOSE(patrol_duty_hook, isPatrol);
 
 struct readable_build_plate_hook : df::viewscreen_dwarfmodest
 {
@@ -1298,12 +1282,9 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
     {
         enable_hook(out, INTERPOSE_HOOK(stable_cursor_hook, feed), parameters);
     }
-    else if (cmd == "patrol-duty")
-    {
-        enable_hook(out, INTERPOSE_HOOK(patrol_duty_hook, isPatrol), parameters);
-    }
     else if (cmd == "readable-build-plate")
     {
+        // Fixed in 0.40.07
         if (!ui_build_selector || !ui_menu_width || !ui_area_map_width)
         {
             out.printerr("Necessary globals not known.\n");
@@ -1320,6 +1301,7 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
     }
     else if (cmd == "stable-temp")
     {
+        // Fixed in 0.40.07
         enable_hook(out, INTERPOSE_HOOK(stable_temp_hook, adjustTemperature), parameters);
         enable_hook(out, INTERPOSE_HOOK(stable_temp_hook, updateContaminants), parameters);
     }
@@ -1369,6 +1351,7 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
     }*/
     else if (cmd == "hive-crash")
     {
+        // Fixed in 0.40.07
         enable_hook(out, INTERPOSE_HOOK(hive_crash_hook, updateAction), parameters);
     }
     else if (cmd == "craft-age-wear")
