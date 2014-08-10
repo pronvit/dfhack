@@ -1366,8 +1366,13 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
         enable_hook(out, INTERPOSE_HOOK(adamantine_cloth_wear_shoes_hook, incWearTimer), parameters);
         enable_hook(out, INTERPOSE_HOOK(adamantine_cloth_wear_pants_hook, incWearTimer), parameters);
     }
-    else
+    else if (cmd == "help" || cmd == "?" || cmd == "--help" || cmd == "list" || cmd == "show")
         return CR_WRONG_USAGE;
+    else
+    {
+        out.printerr("Unknown tweak: %s\n", cmd.c_str());
+        return CR_FAILURE;
+    }
 
     return CR_OK;
 }
