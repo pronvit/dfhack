@@ -11,6 +11,7 @@
 #include "modules/Units.h"
 #include "modules/Items.h"
 #include "modules/Job.h"
+#include "modules/MapCache.h"
 #include "modules/Materials.h"
 
 #include "MiscUtils.h"
@@ -50,6 +51,7 @@
 #include "df/item_clothst.h"
 #include "df/contaminant.h"
 #include "df/layer_object.h"
+#include "df/plant_raw.h"
 #include "df/reaction.h"
 #include "df/reaction_reagent_itemst.h"
 #include "df/reaction_reagent_flags.h"
@@ -679,8 +681,40 @@ struct farm_select_hook : df::viewscreen_dwarfmodest {
         return farm_plot;
     }
 
-    bool isValidCrop (int32_t crop_id, int season)
+    bool isValidCrop (int32_t crop_id, int season, df::building_farmplotst* farm_plot)
     {
+        // Adapted from autofarm
+        using namespace df::enums::plant_raw_flags;
+        // Discovered?
+        if (ui->tasks.discovered_plants[crop_id])
+        {
+            // Possible to plant?
+            df::plant_raw* raws = world->raws.plants.all[crop_id];
+            if (raws->flags[(unsigned int)SEED] && raws->flags[(unsigned int)season])
+            {
+                // Right depth?
+                DFCoord cursor (farm_plot->centerx, farm_plot->centery, farm_plot->z);
+                MapExtras::MapCache mc;
+                MapExtras::Block * b = mc.BlockAt(cursor / 16);
+                if (!b || !b->is_valid())
+                    return false;
+                auto &block = *b->getRaw();
+                df::tile_designation &des =
+                    block.designation[farm_plot->centerx % 16][farm_plot->centery % 16];
+                if ((raws->underground_depth_min == 0 || raws->underground_depth_max == 0) != des.bits.subterranean)
+                {
+                    //// Seeds available?
+                    //vector<df::item*> seeds = world->items.other[SEEDS];
+                    //for (auto iter = seeds.begin(); iter != seeds.end(); ++iter)
+                    //{
+                    //    df::item* i = *iter;
+                    //    
+                    //}
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     inline int32_t getSelectedCropId() { return ui->selected_farm_crops[*ui_building_item_cursor]; }
