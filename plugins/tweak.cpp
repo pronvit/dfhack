@@ -14,6 +14,7 @@
 #include "modules/Materials.h"
 
 #include "MiscUtils.h"
+#include "uicommon.h"
 
 #include "DataDefs.h"
 #include <VTableInterpose.h>
@@ -66,6 +67,7 @@
 #include "df/activity_event_skill_demonstrationst.h"
 #include "df/activity_event_sparringst.h"
 //#include "df/building_hivest.h"
+#include "df/building_farmplotst.h"
 
 #include <stdlib.h>
 
@@ -79,6 +81,7 @@ using namespace df::enums;
 using df::global::ui;
 using df::global::world;
 using df::global::ui_build_selector;
+using df::global::ui_building_item_cursor;
 using df::global::ui_menu_width;
 using df::global::ui_area_map_width;
 
@@ -137,6 +140,8 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
         "  tweak fast-trade [disable]\n"
         "    Makes Shift-Enter in the Move Goods to Depot and Trade screens select\n"
         "    the current item (fully, in case of a stack), and scroll down one line.\n"
+        "  tweak farm-plot-select [disable]\n"
+        "    Adds selection options to farm plot menus\n"
         "  tweak military-stable-assign [disable]\n"
         "    Preserve list order and cursor position when assigning to squad,\n"
         "    i.e. stop the rightmost list of the Positions page of the military\n"
@@ -309,12 +314,6 @@ static confirm_embark_states confirm_embark_state = ECS_INACTIVE;
 struct confirm_embark_hook : df::viewscreen_setupdwarfgamest
 {
     typedef df::viewscreen_setupdwarfgamest interpose_base;
-
-    void OutputString(int8_t fg, int &x, int y, std::string text)
-    {
-        Screen::paintString(Screen::Pen(' ', fg, COLOR_BLACK), x, y, text);
-        x += text.length();
-    }
 
     DEFINE_VMETHOD_INTERPOSE(void, feed, (set<df::interface_key> *input))
     {
@@ -668,6 +667,65 @@ struct fast_trade_select_hook : df::viewscreen_tradegoodsst {
 };
 
 IMPLEMENT_VMETHOD_INTERPOSE(fast_trade_select_hook, feed);
+
+struct farm_select_hook : df::viewscreen_dwarfmodest {
+    typedef df::viewscreen_dwarfmodest interpose_base;
+
+    df::building_farmplotst* getFarmPlot()
+    {
+        if (ui->main.mode != ui_sidebar_mode::QueryBuilding)
+            return NULL;
+        VIRTUAL_CAST_VAR(farm_plot, df::building_farmplotst, world->selected_building);
+        return farm_plot;
+    }
+
+    bool isValidCrop (int32_t crop_id, int season)
+    {
+    }
+
+    inline int32_t getSelectedCropId() { return ui->selected_farm_crops[*ui_building_item_cursor]; }
+
+    DEFINE_VMETHOD_INTERPOSE(void, feed, (set<df::interface_key> *input))
+    {
+        df::building_farmplotst* farm_plot = getFarmPlot();
+        if (farm_plot)
+        {
+            if (input->count(interface_key::SELECT_ALL))
+            {
+                int32_t crop_id = getSelectedCropId();
+                for (int season = 0; season < 4; season++)
+                {
+                    farm_plot->plant_id[season] = crop_id;
+                }
+            }
+            else if (input->count(interface_key::DESELECT_ALL))
+            {
+                for (int season = 0; season < 4; season++)
+                {
+                    farm_plot->plant_id[season] = -1;
+                }
+            }
+        }
+        INTERPOSE_NEXT(feed)(input);
+    }
+
+    DEFINE_VMETHOD_INTERPOSE(void, render, ())
+    {
+        INTERPOSE_NEXT(render)();
+        if (!getFarmPlot())
+            return;
+        auto dims = Gui::getDwarfmodeViewDims();
+        int x = dims.menu_x1 + 1,
+            y = dims.y2 - 5,
+            left = x;
+        OutputString(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(interface_key::SELECT_ALL));
+        OutputString(COLOR_WHITE, x, y, ": All seasons", true, left);
+        OutputString(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(interface_key::DESELECT_ALL));
+        OutputString(COLOR_WHITE, x, y, ": Fallow all seasons", true, left);
+    }
+};
+IMPLEMENT_VMETHOD_INTERPOSE(farm_select_hook, render);
+IMPLEMENT_VMETHOD_INTERPOSE(farm_select_hook, feed);
 
 struct military_assign_hook : df::viewscreen_layer_militaryst {
     typedef df::viewscreen_layer_militaryst interpose_base;
@@ -1265,6 +1323,11 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
     {
         enable_hook(out, INTERPOSE_HOOK(fast_trade_assign_hook, feed), parameters);
         enable_hook(out, INTERPOSE_HOOK(fast_trade_select_hook, feed), parameters);
+    }
+    else if (cmd == "farm-plot-select")
+    {
+        enable_hook(out, INTERPOSE_HOOK(farm_select_hook, render), parameters);
+        enable_hook(out, INTERPOSE_HOOK(farm_select_hook, feed), parameters);
     }
     else if (cmd == "military-stable-assign")
     {
