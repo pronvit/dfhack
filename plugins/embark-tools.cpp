@@ -80,7 +80,6 @@ typedef std::set<df::interface_key> ikey_set;
 class EmbarkTool
 {
 protected:
-    //df::viewscreen_choose_start_sitest * screen;
     bool enabled;
 public:
     EmbarkTool()
@@ -319,8 +318,6 @@ public:
                 case df::interface_key::CURSOR_DOWNRIGHT_FAST:
                     is_motion = true;
                     break;
-                //default:
-                //    is_motion = false;
             }
             if (is_motion && !moved_position)
             {
@@ -331,21 +328,6 @@ public:
     };
     virtual void after_feed(start_sitest* screen, ikey_set* input) { };
 };
-
-
-/*
-EmbarkTool embark_tools[] = {
-    {"anywhere", "Embark anywhere", "Allows embarking anywhere on the world map",
-        false, df::interface_key::CUSTOM_A},
-    {"nano", "Nano embark", "Allows the embark size to be decreased below 2x2",
-        false, df::interface_key::CUSTOM_N},
-    {"sand", "Sand indicator", "Displays an indicator when sand is present on the given embark site",
-        false, df::interface_key::CUSTOM_S},
-    {"sticky", "Stable position", "Maintains the selected local area while navigating the world map",
-        false, df::interface_key::CUSTOM_P},
-};
-*/
-
 
 class embark_tools_settings : public dfhack_viewscreen
 {
@@ -406,207 +388,6 @@ public:
     };
 };
 
-
-/*
-int sticky_pos[] = {0, 0, 3, 3};
-bool sticky_moved = false;
-void sticky_save (df::viewscreen_choose_start_sitest * screen)
-{
-    sticky_pos[0] = screen->location.embark_pos_min.x;
-    sticky_pos[1] = screen->location.embark_pos_max.x;
-    sticky_pos[2] = screen->location.embark_pos_min.y;
-    sticky_pos[3] = screen->location.embark_pos_max.y;
-}
-
-void sticky_apply (df::viewscreen_choose_start_sitest * screen)
-{
-    if (screen->finder.finder_state != -1)
-    {
-        // Site finder is active - don't override default local position
-        return;
-    }
-    screen->location.embark_pos_min.x = sticky_pos[0];
-    screen->location.embark_pos_max.x = sticky_pos[1];
-    screen->location.embark_pos_min.y = sticky_pos[2];
-    screen->location.embark_pos_max.y = sticky_pos[3];
-    update_embark_sidebar(screen);
-}
-
-void OutputString (int8_t color, int &x, int y, const std::string &text)
-{
-    Screen::paintString(Screen::Pen(' ', color, 0), x, y, text);
-    x += text.length();
-}
-
-struct choose_start_site_hook : df::viewscreen_choose_start_sitest
-{
-    typedef df::viewscreen_choose_start_sitest interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(void, feed, (std::set<df::interface_key> *input))
-    {
-        bool prevent_default = false;
-        if (tool_enabled("anywhere"))
-        {
-            for (auto iter = input->begin(); iter != input->end(); iter++)
-            {
-                df::interface_key key = *iter;
-                if (key == df::interface_key::SETUP_EMBARK)
-                {
-                    prevent_default = true;
-                    this->in_embark_normal = 1;
-                }
-            }
-        }
-
-        if (input->count(df::interface_key::CUSTOM_S))
-        {
-            Screen::show(new embark_tools_settings);
-            return;
-        }
-
-        if (tool_enabled("nano"))
-        {
-            for (auto iter = input->begin(); iter != input->end(); iter++)
-            {
-                df::interface_key key = *iter;
-                bool is_resize = true;
-                int dx = 0, dy = 0;
-                switch (key)
-                {
-                    case df::interface_key::SETUP_LOCAL_Y_UP:
-                        dy = 1;
-                        break;
-                    case df::interface_key::SETUP_LOCAL_Y_DOWN:
-                        dy = -1;
-                        break;
-                    case df::interface_key::SETUP_LOCAL_X_UP:
-                        dx = 1;
-                        break;
-                    case df::interface_key::SETUP_LOCAL_X_DOWN:
-                        dx = -1;
-                        break;
-                    default:
-                        is_resize = false;
-                }
-                if (is_resize)
-                {
-                    prevent_default = true;
-                    resize_embark(this, dx, dy);
-                }
-            }
-        }
-
-        if (tool_enabled("sticky"))
-        {
-            for (auto iter = input->begin(); iter != input->end(); iter++)
-            {
-                df::interface_key key = *iter;
-                bool is_motion = false;
-                int dx = 0, dy = 0;
-                switch (key)
-                {
-                    case df::interface_key::CURSOR_UP:
-                    case df::interface_key::CURSOR_DOWN:
-                    case df::interface_key::CURSOR_LEFT:
-                    case df::interface_key::CURSOR_RIGHT:
-                    case df::interface_key::CURSOR_UPLEFT:
-                    case df::interface_key::CURSOR_UPRIGHT:
-                    case df::interface_key::CURSOR_DOWNLEFT:
-                    case df::interface_key::CURSOR_DOWNRIGHT:
-                    case df::interface_key::CURSOR_UP_FAST:
-                    case df::interface_key::CURSOR_DOWN_FAST:
-                    case df::interface_key::CURSOR_LEFT_FAST:
-                    case df::interface_key::CURSOR_RIGHT_FAST:
-                    case df::interface_key::CURSOR_UPLEFT_FAST:
-                    case df::interface_key::CURSOR_UPRIGHT_FAST:
-                    case df::interface_key::CURSOR_DOWNLEFT_FAST:
-                    case df::interface_key::CURSOR_DOWNRIGHT_FAST:
-                        is_motion = true;
-                        break;
-                    default:
-                        is_motion = false;
-                }
-                if (is_motion && !sticky_moved)
-                {
-                    sticky_save(this);
-                    sticky_moved = true;
-                }
-            }
-        }
-
-        if (tool_enabled("sand"))
-        {
-            sand_dirty = true;
-        }
-        if (!prevent_default)
-            INTERPOSE_NEXT(feed)(input);
-    }
-
-    DEFINE_VMETHOD_INTERPOSE(void, render, ())
-    {
-        if (tool_enabled("sticky") && sticky_moved)
-        {
-            sticky_apply(this);
-            sticky_moved = false;
-        }
-
-        INTERPOSE_NEXT(render)();
-
-        auto dim = Screen::getWindowSize();
-        int x = 1,
-            y = dim.y - 5;
-        OutputString(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_S));
-        OutputString(COLOR_WHITE, x, y, ": Enabled: ");
-        std::list<std::string> parts;
-        for (int i = 0; i < NUM_TOOLS; i++)
-        {
-            if (embark_tools[i].enabled)
-            {
-                parts.push_back(embark_tools[i].name);
-                parts.push_back(", ");
-            }
-        }
-        if (parts.size())
-        {
-            parts.pop_back();  // Remove trailing comma
-            for (auto iter = parts.begin(); iter != parts.end(); iter++)
-            {
-                OutputString(COLOR_LIGHTMAGENTA, x, y, *iter);
-            }
-        }
-        else
-        {
-            OutputString(COLOR_LIGHTMAGENTA, x, y, "(none)");
-        }
-
-        if (tool_enabled("anywhere"))
-        {
-            x = 20; y = dim.y - 2;
-            if (this->page >= 0 && this->page <= 4)
-            {
-                // Only display on five map pages, not on site finder or notes
-                OutputString(COLOR_WHITE, x, y, ": Embark!");
-            }
-        }
-        if (tool_enabled("sand"))
-        {
-            if (sand_dirty)
-            {
-                sand_update(this);
-            }
-            x = dim.x - 28; y = 13;
-            if (this->page == 0)
-            {
-                OutputString(COLOR_YELLOW, x, y, sand_indicator);
-            }
-        }
-    }
-};
-
-IMPLEMENT_VMETHOD_INTERPOSE(choose_start_site_hook, feed);
-IMPLEMENT_VMETHOD_INTERPOSE(choose_start_site_hook, render);
-*/
-
 bool tool_exists (std::string tool_name)
 {
     FOR_ITER_TOOLS(iter)
@@ -638,21 +419,11 @@ bool tool_enable (std::string tool_name, bool enable_state)
         if (tool->getId() == tool_name || tool_name == "all")
         {
             tool->setEnabled(enable_state);
-            //tool_update(tool_name);
             n++;
         }
     }
     return (bool)n;
 }
-
-//void tool_update (std::string tool_name)
-//{
-//    // Called whenever a tool is enabled/disabled
-//    if (tool_name == "sand")
-//    {
-//        sand_dirty = true;
-//    }
-//}
 
 struct choose_start_site_hook : df::viewscreen_choose_start_sitest
 {
