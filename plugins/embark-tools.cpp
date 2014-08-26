@@ -75,6 +75,7 @@ void resize_embark (df::viewscreen_choose_start_sitest * screen, int dx, int dy)
 }
 
 typedef df::viewscreen_choose_start_sitest start_sitest;
+typedef std::set<df::interface_key> ikey_set;
 
 class EmbarkTool
 {
@@ -94,10 +95,26 @@ public:
     virtual df::interface_key getToggleKey() = 0;
     virtual void before_render(start_sitest* screen) = 0;
     virtual void after_render(start_sitest* screen) = 0;
-    virtual void before_feed(start_sitest* screen, std::set<df::interface_key> *input, bool &cancel) = 0;
-    virtual void after_feed(start_sitest* screen, std::set<df::interface_key> *input) = 0;
+    virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel) = 0;
+    virtual void after_feed(start_sitest* screen, ikey_set* input) = 0;
 };
 std::vector<EmbarkTool*> tools;
+
+/*
+
+class SampleTool : public EmbarkTool
+{
+    virtual std::string getId() { return "id"; }
+    virtual std::string getName() { return "Name"; }
+    virtual std::string getDesc() { return "Description"; }
+    virtual df::interface_key getToggleKey() { return df::interface_key::KEY; }
+    virtual void before_render(start_sitest* screen) { }
+    virtual void after_render(start_sitest* screen) { }
+    virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel) { };
+    virtual void after_feed(start_sitest* screen, ikey_set* input) { };
+};
+
+*/
 
 class EmbarkAnywhere : public EmbarkTool
 {
@@ -118,7 +135,7 @@ class EmbarkAnywhere : public EmbarkTool
             OutputString(COLOR_WHITE, x, y, ": Embark!");
         }
     }
-    virtual void before_feed(start_sitest* screen, std::set<df::interface_key> *input, bool &cancel)
+    virtual void before_feed(start_sitest* screen, ikey_set *input, bool &cancel)
     {
         if (input->count(df::interface_key::SETUP_EMBARK))
         {
@@ -126,8 +143,52 @@ class EmbarkAnywhere : public EmbarkTool
             screen->in_embark_normal = 1;
         }
     };
-    virtual void after_feed(start_sitest* screen, std::set<df::interface_key> *input) { };
+    virtual void after_feed(start_sitest* screen, ikey_set *input) { };
 };
+
+class NanoEmbark : public EmbarkTool
+{
+    virtual std::string getId() { return "nano"; }
+    virtual std::string getName() { return "Nano Embark"; }
+    virtual std::string getDesc() { return "Allows the embark size to be decreased below 2x2"; }
+    virtual df::interface_key getToggleKey() { return df::interface_key::CUSTOM_N; }
+    virtual void before_render(start_sitest* screen) { }
+    virtual void after_render(start_sitest* screen) { }
+    virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel)
+    {
+        for (auto iter = input->begin(); iter != input->end(); iter++)
+        {
+            df::interface_key key = *iter;
+            bool is_resize = true;
+            int dx = 0, dy = 0;
+            switch (key)
+            {
+                case df::interface_key::SETUP_LOCAL_Y_UP:
+                    dy = 1;
+                    break;
+                case df::interface_key::SETUP_LOCAL_Y_DOWN:
+                    dy = -1;
+                    break;
+                case df::interface_key::SETUP_LOCAL_X_UP:
+                    dx = 1;
+                    break;
+                case df::interface_key::SETUP_LOCAL_X_DOWN:
+                    dx = -1;
+                    break;
+                default:
+                    is_resize = false;
+            }
+            if (is_resize)
+            {
+                cancel = true;
+                resize_embark(screen, dx, dy);
+                return;
+            }
+        }
+    };
+    virtual void after_feed(start_sitest* screen, ikey_set* input) { };
+};
+
 
 /*
 struct EmbarkTool
@@ -578,6 +639,7 @@ command_result embark_tools_cmd (color_ostream &out, std::vector <std::string> &
 DFhackCExport command_result plugin_init (color_ostream &out, std::vector <PluginCommand> &commands)
 {
     tools.push_back(new EmbarkAnywhere);
+    tools.push_back(new NanoEmbark);
     std::string help = "";
     help += "embark-tools (enable/disable) tool [tool...]\n"
             "Tools:\n";
