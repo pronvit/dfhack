@@ -246,16 +246,94 @@ public:
     };
 };
 
-/*
-struct EmbarkTool
+class StablePosition : public EmbarkTool
 {
-    std::string id;
-    std::string name;
-    std::string desc;
-    bool enabled;
-    df::interface_key toggle_key;
+protected:
+    int prev_position[4];
+    bool moved_position;
+    void save_position(start_sitest* screen)
+    {
+        prev_position[0] = screen->location.embark_pos_min.x;
+        prev_position[1] = screen->location.embark_pos_max.x;
+        prev_position[2] = screen->location.embark_pos_min.y;
+        prev_position[3] = screen->location.embark_pos_max.y;
+    }
+    void restore_position(start_sitest* screen)
+    {
+        if (screen->finder.finder_state != -1)
+        {
+            // Site finder is active - don't override default local position
+            return;
+        }
+        screen->location.embark_pos_min.x = prev_position[0];
+        screen->location.embark_pos_max.x = prev_position[1];
+        screen->location.embark_pos_min.y = prev_position[2];
+        screen->location.embark_pos_max.y = prev_position[3];
+        update_embark_sidebar(screen);
+    }
+public:
+    StablePosition()
+        :EmbarkTool(),
+        moved_position(false)
+    {
+        prev_position[0] = 0;
+        prev_position[1] = 0;
+        prev_position[2] = 3;
+        prev_position[3] = 3;
+    }
+    virtual std::string getId() { return "sticky"; }
+    virtual std::string getName() { return "Stable position"; }
+    virtual std::string getDesc() { return "Maintains the selected local area while navigating the world map"; }
+    virtual df::interface_key getToggleKey() { return df::interface_key::CUSTOM_P; }
+    virtual void before_render(start_sitest* screen) {
+        if (moved_position)
+        {
+            restore_position(screen);
+            moved_position = false;
+        }
+    }
+    virtual void after_render(start_sitest* screen) { }
+    virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel) {
+        for (auto iter = input->begin(); iter != input->end(); iter++)
+        {
+            df::interface_key key = *iter;
+            bool is_motion = false;
+            int dx = 0, dy = 0;
+            switch (key)
+            {
+                case df::interface_key::CURSOR_UP:
+                case df::interface_key::CURSOR_DOWN:
+                case df::interface_key::CURSOR_LEFT:
+                case df::interface_key::CURSOR_RIGHT:
+                case df::interface_key::CURSOR_UPLEFT:
+                case df::interface_key::CURSOR_UPRIGHT:
+                case df::interface_key::CURSOR_DOWNLEFT:
+                case df::interface_key::CURSOR_DOWNRIGHT:
+                case df::interface_key::CURSOR_UP_FAST:
+                case df::interface_key::CURSOR_DOWN_FAST:
+                case df::interface_key::CURSOR_LEFT_FAST:
+                case df::interface_key::CURSOR_RIGHT_FAST:
+                case df::interface_key::CURSOR_UPLEFT_FAST:
+                case df::interface_key::CURSOR_UPRIGHT_FAST:
+                case df::interface_key::CURSOR_DOWNLEFT_FAST:
+                case df::interface_key::CURSOR_DOWNRIGHT_FAST:
+                    is_motion = true;
+                    break;
+                //default:
+                //    is_motion = false;
+            }
+            if (is_motion && !moved_position)
+            {
+                save_position(screen);
+                moved_position = true;
+            }
+        }
+    };
+    virtual void after_feed(start_sitest* screen, ikey_set* input) { };
 };
 
+
+/*
 EmbarkTool embark_tools[] = {
     {"anywhere", "Embark anywhere", "Allows embarking anywhere on the world map",
         false, df::interface_key::CUSTOM_A},
@@ -266,14 +344,6 @@ EmbarkTool embark_tools[] = {
     {"sticky", "Stable position", "Maintains the selected local area while navigating the world map",
         false, df::interface_key::CUSTOM_P},
 };
-#define NUM_TOOLS int(sizeof(embark_tools) / sizeof(EmbarkTool))
-
-void OutputString (int8_t color, int &x, int y, const std::string &text);
-
-bool tool_exists (std::string tool_name);
-bool tool_enabled (std::string tool_name);
-bool tool_enable (std::string tool_name, bool enable_state);
-void tool_update (std::string tool_name);
 */
 
 
@@ -338,27 +408,6 @@ public:
 
 
 /*
-std::string sand_indicator = "";
-bool sand_dirty = true;  // Flag set when update is needed
-void sand_update (df::viewscreen_choose_start_sitest * screen)
-{
-    CoreSuspendClaimer suspend;
-    buffered_color_ostream out;
-    Core::getInstance().runCommand(out, "prospect");
-    auto fragments = out.fragments();
-    sand_indicator = "";
-    for (auto iter = fragments.begin(); iter != fragments.end(); iter++)
-    {
-        std::string fragment = iter->second;
-        if (fragment.find("SAND_") != std::string::npos)
-        {
-            sand_indicator = "Sand";
-            break;
-        }
-    }
-    sand_dirty = false;
-}
-
 int sticky_pos[] = {0, 0, 3, 3};
 bool sticky_moved = false;
 void sticky_save (df::viewscreen_choose_start_sitest * screen)
@@ -697,6 +746,7 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
     tools.push_back(new EmbarkAnywhere);
     tools.push_back(new NanoEmbark);
     tools.push_back(new SandIndicator);
+    tools.push_back(new StablePosition);
     std::string help = "";
     help += "embark-tools (enable/disable) tool [tool...]\n"
             "Tools:\n";
