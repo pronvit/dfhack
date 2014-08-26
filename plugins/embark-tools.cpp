@@ -118,11 +118,9 @@ class SampleTool : public EmbarkTool
 
 class EmbarkAnywhere : public EmbarkTool
 {
-    //EmbarkAnywhere(df::viewscreen_choose_start_sitest * screen)
-    //    :EmbarkTool(screen)
-    //{ }
+public:
     virtual std::string getId() { return "anywhere"; }
-    virtual std::string getName() { return "Embark Anywhere"; }
+    virtual std::string getName() { return "Embark anywhere"; }
     virtual std::string getDesc() { return "Allows embarking anywhere on the world map"; }
     virtual df::interface_key getToggleKey() { return df::interface_key::CUSTOM_A; }
     virtual void before_render(start_sitest* screen) { }
@@ -148,8 +146,9 @@ class EmbarkAnywhere : public EmbarkTool
 
 class NanoEmbark : public EmbarkTool
 {
+public:
     virtual std::string getId() { return "nano"; }
-    virtual std::string getName() { return "Nano Embark"; }
+    virtual std::string getName() { return "Nano embark"; }
     virtual std::string getDesc() { return "Allows the embark size to be decreased below 2x2"; }
     virtual df::interface_key getToggleKey() { return df::interface_key::CUSTOM_N; }
     virtual void before_render(start_sitest* screen) { }
@@ -189,6 +188,63 @@ class NanoEmbark : public EmbarkTool
     virtual void after_feed(start_sitest* screen, ikey_set* input) { };
 };
 
+class SandIndicator : public EmbarkTool
+{
+protected:
+    bool dirty;
+    std::string indicator;
+    void update_indicator()
+    {
+        CoreSuspendClaimer suspend;
+        buffered_color_ostream out;
+        Core::getInstance().runCommand(out, "prospect");
+        auto fragments = out.fragments();
+        indicator = "";
+        for (auto iter = fragments.begin(); iter != fragments.end(); iter++)
+        {
+            std::string fragment = iter->second;
+            if (fragment.find("SAND_") != std::string::npos)
+            {
+                indicator = "Sand";
+                break;
+            }
+        }
+        dirty = false;
+    }
+public:
+    SandIndicator()
+        :EmbarkTool(),
+        dirty(true),
+        indicator("")
+    { }
+    virtual void setEnabled(bool state)
+    {
+        EmbarkTool::setEnabled(state);
+        dirty = true;
+    }
+    virtual std::string getId() { return "sand"; }
+    virtual std::string getName() { return "Sand indicator"; }
+    virtual std::string getDesc() { return "Displays an indicator when sand is present on the given embark site"; }
+    virtual df::interface_key getToggleKey() { return df::interface_key::CUSTOM_S; }
+    virtual void before_render(start_sitest* screen) { }
+    virtual void after_render(start_sitest* screen)
+    {
+        if (dirty)
+            update_indicator();
+        auto dim = Screen::getWindowSize();
+        int x = dim.x - 28,
+            y = 13;
+        if (screen->page == 0)
+        {
+            OutputString(COLOR_YELLOW, x, y, indicator);
+        }
+    }
+    virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel) { };
+    virtual void after_feed(start_sitest* screen, ikey_set* input)
+    {
+        dirty = true;
+    };
+};
 
 /*
 struct EmbarkTool
@@ -640,10 +696,10 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
 {
     tools.push_back(new EmbarkAnywhere);
     tools.push_back(new NanoEmbark);
+    tools.push_back(new SandIndicator);
     std::string help = "";
     help += "embark-tools (enable/disable) tool [tool...]\n"
             "Tools:\n";
-    //for (int i = 0; i < NUM_TOOLS; i++)
     FOR_ITER_TOOLS(iter)
     {
         help += ("  " + (*iter)->getId() + ": " + (*iter)->getDesc() + "\n");
