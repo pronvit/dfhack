@@ -50,6 +50,7 @@ distribution.
 #include "modules/MapCache.h"
 #include "modules/Burrows.h"
 #include "modules/Buildings.h"
+#include "modules/Colors.h"
 #include "modules/Constructions.h"
 #include "modules/Random.h"
 #include "modules/Filesystem.h"
@@ -1773,6 +1774,15 @@ static const luaL_Reg dfhack_constructions_funcs[] = {
     { NULL, NULL }
 };
 
+/***** Colors module *****/
+
+static const LuaWrapper::FunctionReg dfhack_colors_module[] = {
+    WRAPM(Colors, schemeExists),
+    WRAPM(Colors, loadScheme),
+    WRAPM(Colors, saveScheme),
+    {NULL, NULL}
+};
+
 /***** Screen module *****/
 
 static const LuaWrapper::FunctionReg dfhack_screen_module[] = {
@@ -2380,6 +2390,7 @@ void OpenDFHackApi(lua_State *state)
     OpenModule(state, "burrows", dfhack_burrows_module, dfhack_burrows_funcs);
     OpenModule(state, "buildings", dfhack_buildings_module, dfhack_buildings_funcs);
     OpenModule(state, "constructions", dfhack_constructions_module);
+    OpenModule(state, "colors", dfhack_colors_module);
     OpenModule(state, "screen", dfhack_screen_module, dfhack_screen_funcs);
     OpenModule(state, "filesystem", dfhack_filesystem_module);
     OpenModule(state, "internal", dfhack_internal_module, dfhack_internal_funcs);
