@@ -70,7 +70,10 @@
 #include <stdlib.h>
 #include <unordered_map>
 
-#include "tweaks/stable-cursor.cpp"
+#include "tweaks/advmode-contained.h"
+#include "tweaks/fast-heat.h"
+#include "tweaks/fast-trade.h"
+#include "tweaks/stable-cursor.h"
 
 using std::set;
 using std::vector;
@@ -154,6 +157,15 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
 
     TWEAK_HOOK("stable-cursor", stable_cursor_hook, feed);
 
+    TWEAK_HOOK("fast-trade", fast_trade_assign_hook, feed);
+    TWEAK_HOOK("fast-trade", fast_trade_select_hook, feed);
+
+    TWEAK_HOOK("fast-heat", fast_heat_hook, updateTempFromMap);
+    TWEAK_HOOK("fast-heat", fast_heat_hook, updateTemperature);
+    TWEAK_HOOK("fast-heat", fast_heat_hook, adjustTemperature);
+
+    TWEAK_HOOK("advmode-contained", advmode_contained_hook, feed);
+
     return CR_OK;
 }
 
@@ -218,53 +230,6 @@ command_result fix_clothing_ownership(color_ostream &out, df::unit* unit)
     out << "ownership for " << fixcount << " clothes fixed" << endl;
     return CR_OK;
 }
-
-
-static int map_temp_mult = -1;
-static int max_heat_ticks = 0;
-
-struct fast_heat_hook : df::item_actual {
-    typedef df::item_actual interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(
-        bool, updateTempFromMap,
-        (bool local, bool contained, bool adjust, int32_t rate_mult)
-    ) {
-        int cmult = map_temp_mult;
-        map_temp_mult = rate_mult;
-
-        bool rv = INTERPOSE_NEXT(updateTempFromMap)(local, contained, adjust, rate_mult);
-        map_temp_mult = cmult;
-        return rv;
-    }
-
-    DEFINE_VMETHOD_INTERPOSE(
-        bool, updateTemperature,
-        (uint16_t temp, bool local, bool contained, bool adjust, int32_t rate_mult)
-    ) {
-        // Some items take ages to cross the last degree, so speed them up
-        if (map_temp_mult > 0 && temp != temperature.whole && max_heat_ticks > 0)
-        {
-            int spec = getSpecHeat();
-            if (spec != 60001)
-                rate_mult = std::max(map_temp_mult, spec/max_heat_ticks/abs(temp - temperature.whole));
-        }
-
-        return INTERPOSE_NEXT(updateTemperature)(temp, local, contained, adjust, rate_mult);
-    }
-
-    DEFINE_VMETHOD_INTERPOSE(bool, adjustTemperature, (uint16_t temp, int32_t rate_mult))
-    {
-        if (map_temp_mult > 0)
-            rate_mult = map_temp_mult;
-
-        return INTERPOSE_NEXT(adjustTemperature)(temp, rate_mult);
-    }
-};
-
-IMPLEMENT_VMETHOD_INTERPOSE(fast_heat_hook, updateTempFromMap);
-IMPLEMENT_VMETHOD_INTERPOSE(fast_heat_hook, updateTemperature);
-IMPLEMENT_VMETHOD_INTERPOSE(fast_heat_hook, adjustTemperature);
 
 static void correct_dimension(df::item_actual *self, int32_t &delta, int32_t dim)
 {
@@ -354,105 +319,6 @@ struct dimension_cloth_hook : df::item_clothst {
 };
 
 IMPLEMENT_VMETHOD_INTERPOSE(dimension_cloth_hook, subtractDimension);
-
-struct advmode_contained_hook : df::viewscreen_layer_unit_actionst {
-    typedef df::viewscreen_layer_unit_actionst interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(void, feed, (set<df::interface_key> *input))
-    {
-        auto old_reaction = cur_reaction;
-        auto old_reagent = reagent;
-
-        INTERPOSE_NEXT(feed)(input);
-
-        if (cur_reaction && (cur_reaction != old_reaction || reagent != old_reagent))
-        {
-            old_reagent = reagent;
-
-            // Skip reagents already contained by others
-            while (reagent < (int)cur_reaction->reagents.size()-1)
-            {
-                if (!cur_reaction->reagents[reagent]->flags.bits.IN_CONTAINER)
-                    break;
-                reagent++;
-            }
-
-            if (old_reagent != reagent)
-            {
-                // Reproduces a tiny part of the orginal screen code
-                choice_items.clear();
-
-                auto preagent = cur_reaction->reagents[reagent];
-                reagent_amnt_left = preagent->quantity;
-
-                for (int i = held_items.size()-1; i >= 0; i--)
-                {
-                    if (!preagent->matchesRoot(held_items[i], cur_reaction->index))
-                        continue;
-                    if (linear_index(sel_items, held_items[i]) >= 0)
-                        continue;
-                    choice_items.push_back(held_items[i]);
-                }
-
-                layer_objects[6]->setListLength(choice_items.size());
-
-                if (!choice_items.empty())
-                {
-                    layer_objects[4]->active = layer_objects[5]->active = false;
-                    layer_objects[6]->active = true;
-                }
-                else if (layer_objects[6]->active)
-                {
-                    layer_objects[6]->active = false;
-                    layer_objects[5]->active = true;
-                }
-            }
-        }
-    }
-};
-
-IMPLEMENT_VMETHOD_INTERPOSE(advmode_contained_hook, feed);
-
-struct fast_trade_assign_hook : df::viewscreen_layer_assigntradest {
-    typedef df::viewscreen_layer_assigntradest interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(void, feed, (set<df::interface_key> *input))
-    {
-        if (layer_objects[1]->active && input->count(interface_key::SELECT_ALL))
-        {
-            set<df::interface_key> tmp; tmp.insert(interface_key::SELECT);
-            INTERPOSE_NEXT(feed)(&tmp);
-            tmp.clear(); tmp.insert(interface_key::STANDARDSCROLL_DOWN);
-            INTERPOSE_NEXT(feed)(&tmp);
-        }
-        else
-            INTERPOSE_NEXT(feed)(input);
-    }
-};
-
-IMPLEMENT_VMETHOD_INTERPOSE(fast_trade_assign_hook, feed);
-
-struct fast_trade_select_hook : df::viewscreen_tradegoodsst {
-    typedef df::viewscreen_tradegoodsst interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(void, feed, (set<df::interface_key> *input))
-    {
-        if (!(is_unloading || !has_traders || in_edit_count)
-            && input->count(interface_key::SELECT_ALL))
-        {
-            set<df::interface_key> tmp; tmp.insert(interface_key::SELECT);
-            INTERPOSE_NEXT(feed)(&tmp);
-            if (in_edit_count)
-                INTERPOSE_NEXT(feed)(&tmp);
-            tmp.clear(); tmp.insert(interface_key::STANDARDSCROLL_DOWN);
-            INTERPOSE_NEXT(feed)(&tmp);
-        }
-        else
-            INTERPOSE_NEXT(feed)(input);
-    }
-};
-
-IMPLEMENT_VMETHOD_INTERPOSE(fast_trade_select_hook, feed);
 
 struct military_assign_hook : df::viewscreen_layer_militaryst {
     typedef df::viewscreen_layer_militaryst interpose_base;
@@ -906,6 +772,26 @@ static void enable_hook(color_ostream &out, VMethodInterposeLinkBase &hook, vect
     }
 }
 
+static command_result enable_tweak(string tweak, color_ostream &out, vector <string> &parameters)
+{
+    bool recognized = false;
+    string cmd = parameters[0];
+    for (auto it = tweak_hooks.begin(); it != tweak_hooks.end(); ++it)
+    {
+        if (it->first == cmd)
+        {
+            recognized = true;
+            enable_hook(out, it->second, parameters);
+        }
+    }
+    if (!recognized)
+    {
+        out.printerr("Unrecognized tweak: %s\n", cmd.c_str());
+        return CR_WRONG_USAGE;
+    }
+    return CR_OK;
+}
+
 static command_result tweak(color_ostream &out, vector <string> &parameters)
 {
     CoreSuspender suspend;
@@ -1011,9 +897,8 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
         max_heat_ticks = atoi(parameters[1].c_str());
         if (max_heat_ticks <= 0)
             parameters[1] = "disable";
-        enable_hook(out, INTERPOSE_HOOK(fast_heat_hook, updateTempFromMap), parameters);
-        enable_hook(out, INTERPOSE_HOOK(fast_heat_hook, updateTemperature), parameters);
-        enable_hook(out, INTERPOSE_HOOK(fast_heat_hook, adjustTemperature), parameters);
+        enable_tweak(cmd, out, parameters);
+        return CR_OK;
     }
     /*else if (cmd == "fix-dimensions")
     {
@@ -1023,15 +908,6 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
         enable_hook(out, INTERPOSE_HOOK(dimension_thread_hook, subtractDimension), parameters);
         enable_hook(out, INTERPOSE_HOOK(dimension_cloth_hook, subtractDimension), parameters);
     }*/
-    else if (cmd == "advmode-contained")
-    {
-        enable_hook(out, INTERPOSE_HOOK(advmode_contained_hook, feed), parameters);
-    }
-    else if (cmd == "fast-trade")
-    {
-        enable_hook(out, INTERPOSE_HOOK(fast_trade_assign_hook, feed), parameters);
-        enable_hook(out, INTERPOSE_HOOK(fast_trade_select_hook, feed), parameters);
-    }
     else if (cmd == "military-stable-assign")
     {
         enable_hook(out, INTERPOSE_HOOK(military_assign_hook, feed), parameters);
@@ -1062,20 +938,7 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
     }
     else
     {
-        bool recognized = false;
-        for (auto it = tweak_hooks.begin(); it != tweak_hooks.end(); ++it)
-        {
-            if (it->first == cmd)
-            {
-                recognized = true;
-                enable_hook(out, it->second, parameters);
-            }
-        }
-        if (!recognized)
-        {
-            out.printerr("Unrecognized tweak: %s\n", cmd.c_str());
-            return CR_WRONG_USAGE;
-        }
+        return enable_tweak(cmd, out, parameters);
     }
 
     return CR_OK;
