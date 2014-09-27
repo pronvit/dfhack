@@ -73,6 +73,7 @@
 #include "tweaks/advmode-contained.h"
 #include "tweaks/fast-heat.h"
 #include "tweaks/fast-trade.h"
+#include "tweaks/manager-quantity.h"
 #include "tweaks/stable-cursor.h"
 
 using std::set;
@@ -149,22 +150,26 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
         "    to make them stand out more in the list.\n"
 //        "  tweak military-training [disable]\n"
 //        "    Speed up melee squad training, removing inverse dependency on unit count.\n"
+        "  tweak manager-quantity [disable]\n"
+        "    Removes the limit of 30 jobs per manager order\n"
         "  tweak craft-age-wear [disable]\n"
         "    Makes cloth and leather items wear out at the correct rate (bug 6003).\n"
         "  tweak adamantine-cloth-wear [disable]\n"
         "    Stops adamantine clothing from wearing out while being worn (bug 6481).\n"
     ));
 
-    TWEAK_HOOK("stable-cursor", stable_cursor_hook, feed);
-
-    TWEAK_HOOK("fast-trade", fast_trade_assign_hook, feed);
-    TWEAK_HOOK("fast-trade", fast_trade_select_hook, feed);
+    TWEAK_HOOK("advmode-contained", advmode_contained_hook, feed);
 
     TWEAK_HOOK("fast-heat", fast_heat_hook, updateTempFromMap);
     TWEAK_HOOK("fast-heat", fast_heat_hook, updateTemperature);
     TWEAK_HOOK("fast-heat", fast_heat_hook, adjustTemperature);
 
-    TWEAK_HOOK("advmode-contained", advmode_contained_hook, feed);
+    TWEAK_HOOK("fast-trade", fast_trade_assign_hook, feed);
+    TWEAK_HOOK("fast-trade", fast_trade_select_hook, feed);
+
+    TWEAK_HOOK("manager-quantity", manager_quantity_hook, feed);
+
+    TWEAK_HOOK("stable-cursor", stable_cursor_hook, feed);
 
     return CR_OK;
 }
