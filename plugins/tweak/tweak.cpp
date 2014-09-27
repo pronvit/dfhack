@@ -70,10 +70,13 @@
 #include <stdlib.h>
 #include <unordered_map>
 
+#include "tweaks/adamantine-cloth-wear.h"
 #include "tweaks/advmode-contained.h"
+#include "tweaks/craft-age-wear.h"
 #include "tweaks/fast-heat.h"
 #include "tweaks/fast-trade.h"
 #include "tweaks/manager-quantity.h"
+#include "tweaks/military-assign.h"
 #include "tweaks/stable-cursor.h"
 
 using std::set;
@@ -90,10 +93,8 @@ using df::global::ui_menu_width;
 using df::global::ui_area_map_width;
 
 using namespace DFHack::Gui;
-using Screen::Pen;
 
 static command_result tweak(color_ostream &out, vector <string> & parameters);
-static std::unordered_map<string, string> tweak_info;
 static std::multimap<std::string, VMethodInterposeLinkBase> tweak_hooks;
 
 DFHACK_PLUGIN("tweak");
@@ -158,7 +159,15 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
         "    Stops adamantine clothing from wearing out while being worn (bug 6481).\n"
     ));
 
+    TWEAK_HOOK("adamantine-cloth-wear", adamantine_cloth_wear_armor_hook, incWearTimer);
+    TWEAK_HOOK("adamantine-cloth-wear", adamantine_cloth_wear_helm_hook, incWearTimer);
+    TWEAK_HOOK("adamantine-cloth-wear", adamantine_cloth_wear_gloves_hook, incWearTimer);
+    TWEAK_HOOK("adamantine-cloth-wear", adamantine_cloth_wear_shoes_hook, incWearTimer);
+    TWEAK_HOOK("adamantine-cloth-wear", adamantine_cloth_wear_pants_hook, incWearTimer);
+
     TWEAK_HOOK("advmode-contained", advmode_contained_hook, feed);
+
+    TWEAK_HOOK("craft-age-wear", craft_age_wear_hook, ageItem);
 
     TWEAK_HOOK("fast-heat", fast_heat_hook, updateTempFromMap);
     TWEAK_HOOK("fast-heat", fast_heat_hook, updateTemperature);
@@ -168,6 +177,10 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
     TWEAK_HOOK("fast-trade", fast_trade_select_hook, feed);
 
     TWEAK_HOOK("manager-quantity", manager_quantity_hook, feed);
+
+    TWEAK_HOOK("military-color-assigned", military_assign_hook, render);
+
+    TWEAK_HOOK("military-stable-assign", military_assign_hook, feed);
 
     TWEAK_HOOK("stable-cursor", stable_cursor_hook, feed);
 
@@ -324,102 +337,6 @@ struct dimension_cloth_hook : df::item_clothst {
 };
 
 IMPLEMENT_VMETHOD_INTERPOSE(dimension_cloth_hook, subtractDimension);
-
-struct military_assign_hook : df::viewscreen_layer_militaryst {
-    typedef df::viewscreen_layer_militaryst interpose_base;
-
-    inline bool inPositionsMode() {
-        return page == Positions && !(in_create_squad || in_new_squad);
-    }
-
-    DEFINE_VMETHOD_INTERPOSE(void, feed, (set<df::interface_key> *input))
-    {
-        if (inPositionsMode() && !layer_objects[0]->active)
-        {
-            auto pos_list = layer_objects[1];
-            auto plist = layer_objects[2];
-            auto &cand = positions.candidates;
-
-            // Save the candidate list and cursors
-            std::vector<df::unit*> copy = cand;
-            int cursor = plist->getListCursor();
-            int pos_cursor = pos_list->getListCursor();
-
-            INTERPOSE_NEXT(feed)(input);
-
-            if (inPositionsMode() && !layer_objects[0]->active)
-            {
-                bool is_select = input->count(interface_key::SELECT);
-
-                // Resort the candidate list and restore cursor
-                // on add to squad OR scroll in the position list.
-                if (!plist->active || is_select)
-                {
-                    // Since we don't know the actual sorting order, preserve
-                    // the ordering of the items in the list before keypress.
-                    // This does the right thing even if the list was sorted
-                    // with sort-units.
-                    std::set<df::unit*> prev, next;
-                    prev.insert(copy.begin(), copy.end());
-                    next.insert(cand.begin(), cand.end());
-                    std::vector<df::unit*> out;
-
-                    // (old-before-cursor) (new) |cursor| (old-after-cursor)
-                    for (int i = 0; i < cursor && i < (int)copy.size(); i++)
-                        if (next.count(copy[i])) out.push_back(copy[i]);
-                    for (size_t i = 0; i < cand.size(); i++)
-                        if (!prev.count(cand[i])) out.push_back(cand[i]);
-                    int new_cursor = out.size();
-                    for (int i = cursor; i < (int)copy.size(); i++)
-                        if (next.count(copy[i])) out.push_back(copy[i]);
-
-                    cand.swap(out);
-                    plist->setListLength(cand.size());
-                    if (new_cursor < (int)cand.size())
-                        plist->setListCursor(new_cursor);
-                }
-
-                // Preserve the position list index on remove from squad
-                if (pos_list->active && is_select)
-                    pos_list->setListCursor(pos_cursor);
-            }
-        }
-        else
-            INTERPOSE_NEXT(feed)(input);
-    }
-
-    DEFINE_VMETHOD_INTERPOSE(void, render, ())
-    {
-        INTERPOSE_NEXT(render)();
-
-        if (inPositionsMode())
-        {
-            auto plist = layer_objects[2];
-            int x1 = plist->getX1(), y1 = plist->getY1();
-            int x2 = plist->getX2(), y2 = plist->getY2();
-            int i1 = plist->getFirstVisible(), i2 = plist->getLastVisible();
-            int si = plist->getListCursor();
-
-            for (int y = y1, i = i1; i <= i2; i++, y++)
-            {
-                auto unit = vector_get(positions.candidates, i);
-                if (!unit || unit->military.squad_id < 0)
-                    continue;
-
-                for (int x = x1; x <= x2; x++)
-                {
-                    Pen cur_tile = Screen::readTile(x, y);
-                    if (!cur_tile.valid()) continue;
-                    cur_tile.fg = (i == si) ? COLOR_BROWN : COLOR_GREEN;
-                    Screen::paintTile(cur_tile, x, y);
-                }
-            }
-        }
-    }
-};
-
-IMPLEMENT_VMETHOD_INTERPOSE(military_assign_hook, feed);
-IMPLEMENT_VMETHOD_INTERPOSE(military_assign_hook, render);
 
 // Unit updates are executed based on an action divisor variable,
 // which is computed from the alive unit count and has range 10-100.
@@ -663,104 +580,6 @@ struct military_training_id_hook : df::activity_event_individual_skill_drillst {
 IMPLEMENT_VMETHOD_INTERPOSE(military_training_id_hook, process);
 */
 
-struct craft_age_wear_hook : df::item_crafted {
-    typedef df::item_crafted interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(bool, ageItem, (int amount))
-    {
-        int orig_age = age;
-        age += amount;
-        if (age > 200000000)
-            age = 200000000;
-        if (age == orig_age)
-            return false;
-
-        MaterialInfo mat(mat_type, mat_index);
-        if (!mat.isValid())
-            return false;
-        int wear = 0;
-
-        if (mat.material->flags.is_set(material_flags::WOOD))
-            wear = 5;
-        else if (mat.material->flags.is_set(material_flags::LEATHER) ||
-            mat.material->flags.is_set(material_flags::THREAD_PLANT) ||
-            mat.material->flags.is_set(material_flags::SILK) ||
-            mat.material->flags.is_set(material_flags::YARN))
-            wear = 1;
-        else
-            return false;
-        wear = ((orig_age % wear) + (age - orig_age)) / wear;
-        if (wear > 0)
-            return incWearTimer(wear);
-        else
-            return false;
-    }
-};
-IMPLEMENT_VMETHOD_INTERPOSE(craft_age_wear_hook, ageItem);
-
-static bool inc_wear_timer (df::item_constructed *item, int amount)
-{
-    if (item->flags.bits.artifact)
-        return false;
-
-    MaterialInfo mat(item->mat_type, item->mat_index);
-    if (mat.isInorganic() && mat.inorganic->flags.is_set(inorganic_flags::DEEP_SPECIAL))
-        return false;
-
-    item->wear_timer += amount;
-    return (item->wear_timer > 806400);
-}
-
-struct adamantine_cloth_wear_armor_hook : df::item_armorst {
-    typedef df::item_armorst interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(bool, incWearTimer, (int amount))
-    {
-        return inc_wear_timer(this, amount);
-    }
-};
-IMPLEMENT_VMETHOD_INTERPOSE(adamantine_cloth_wear_armor_hook, incWearTimer);
-
-struct adamantine_cloth_wear_helm_hook : df::item_helmst {
-    typedef df::item_helmst interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(bool, incWearTimer, (int amount))
-    {
-        return inc_wear_timer(this, amount);
-    }
-};
-IMPLEMENT_VMETHOD_INTERPOSE(adamantine_cloth_wear_helm_hook, incWearTimer);
-
-struct adamantine_cloth_wear_gloves_hook : df::item_glovesst {
-    typedef df::item_glovesst interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(bool, incWearTimer, (int amount))
-    {
-        return inc_wear_timer(this, amount);
-    }
-};
-IMPLEMENT_VMETHOD_INTERPOSE(adamantine_cloth_wear_gloves_hook, incWearTimer);
-
-struct adamantine_cloth_wear_shoes_hook : df::item_shoesst {
-    typedef df::item_shoesst interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(bool, incWearTimer, (int amount))
-    {
-        return inc_wear_timer(this, amount);
-    }
-};
-IMPLEMENT_VMETHOD_INTERPOSE(adamantine_cloth_wear_shoes_hook, incWearTimer);
-
-struct adamantine_cloth_wear_pants_hook : df::item_pantsst {
-    typedef df::item_pantsst interpose_base;
-
-    DEFINE_VMETHOD_INTERPOSE(bool, incWearTimer, (int amount))
-    {
-        return inc_wear_timer(this, amount);
-    }
-};
-IMPLEMENT_VMETHOD_INTERPOSE(adamantine_cloth_wear_pants_hook, incWearTimer);
-
 static void enable_hook(color_ostream &out, VMethodInterposeLinkBase &hook, vector <string> &parameters)
 {
     if (vector_get(parameters, 1) == "disable")
@@ -913,14 +732,6 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
         enable_hook(out, INTERPOSE_HOOK(dimension_thread_hook, subtractDimension), parameters);
         enable_hook(out, INTERPOSE_HOOK(dimension_cloth_hook, subtractDimension), parameters);
     }*/
-    else if (cmd == "military-stable-assign")
-    {
-        enable_hook(out, INTERPOSE_HOOK(military_assign_hook, feed), parameters);
-    }
-    else if (cmd == "military-color-assigned")
-    {
-        enable_hook(out, INTERPOSE_HOOK(military_assign_hook, render), parameters);
-    }
 /*
     else if (cmd == "military-training")
     {
@@ -929,18 +740,6 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
         enable_hook(out, INTERPOSE_HOOK(military_training_sp_hook, process), parameters);
         enable_hook(out, INTERPOSE_HOOK(military_training_id_hook, process), parameters);
     }*/
-    else if (cmd == "craft-age-wear")
-    {
-        enable_hook(out, INTERPOSE_HOOK(craft_age_wear_hook, ageItem), parameters);
-    }
-    else if (cmd == "adamantine-cloth-wear")
-    {
-        enable_hook(out, INTERPOSE_HOOK(adamantine_cloth_wear_armor_hook, incWearTimer), parameters);
-        enable_hook(out, INTERPOSE_HOOK(adamantine_cloth_wear_helm_hook, incWearTimer), parameters);
-        enable_hook(out, INTERPOSE_HOOK(adamantine_cloth_wear_gloves_hook, incWearTimer), parameters);
-        enable_hook(out, INTERPOSE_HOOK(adamantine_cloth_wear_shoes_hook, incWearTimer), parameters);
-        enable_hook(out, INTERPOSE_HOOK(adamantine_cloth_wear_pants_hook, incWearTimer), parameters);
-    }
     else
     {
         return enable_tweak(cmd, out, parameters);
