@@ -68,6 +68,9 @@
 //#include "df/building_hivest.h"
 
 #include <stdlib.h>
+#include <unordered_map>
+
+#include "tweaks/stable-cursor.cpp"
 
 using std::set;
 using std::vector;
@@ -86,8 +89,13 @@ using namespace DFHack::Gui;
 using Screen::Pen;
 
 static command_result tweak(color_ostream &out, vector <string> & parameters);
+static std::unordered_map<string, string> tweak_info;
+static std::multimap<std::string, VMethodInterposeLinkBase> tweak_hooks;
 
 DFHACK_PLUGIN("tweak");
+
+#define TWEAK_HOOK(tweak, cls, func) tweak_hooks.insert(std::pair<std::string, VMethodInterposeLinkBase>\
+    (tweak, INTERPOSE_HOOK(cls, func)))
 
 DFhackCExport command_result plugin_init (color_ostream &out, std::vector <PluginCommand> &commands)
 {
@@ -143,6 +151,9 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
         "  tweak adamantine-cloth-wear [disable]\n"
         "    Stops adamantine clothing from wearing out while being worn (bug 6481).\n"
     ));
+
+    TWEAK_HOOK("stable-cursor", stable_cursor_hook, feed);
+
     return CR_OK;
 }
 
@@ -208,75 +219,6 @@ command_result fix_clothing_ownership(color_ostream &out, df::unit* unit)
     return CR_OK;
 }
 
-/*
- * Save or restore cursor position on change to/from main dwarfmode menu.
- */
-
-static df::coord last_view, last_cursor;
-
-struct stable_cursor_hook : df::viewscreen_dwarfmodest
-{
-    typedef df::viewscreen_dwarfmodest interpose_base;
-
-    bool check_default()
-    {
-        switch (ui->main.mode) {
-            case ui_sidebar_mode::Default:
-                return true;
-
-            case ui_sidebar_mode::Build:
-                return ui_build_selector &&
-                       (ui_build_selector->building_type < 0 ||
-                        ui_build_selector->stage < 1);
-
-            default:
-                return false;
-        }
-    }
-
-    DEFINE_VMETHOD_INTERPOSE(void, feed, (set<df::interface_key> *input))
-    {
-        bool was_default = check_default();
-        df::coord view = Gui::getViewportPos();
-        df::coord cursor = Gui::getCursorPos();
-
-        INTERPOSE_NEXT(feed)(input);
-
-        bool is_default = check_default();
-        df::coord cur_cursor = Gui::getCursorPos();
-
-        if (is_default && !was_default)
-        {
-            last_view = view; last_cursor = cursor;
-        }
-        else if (!is_default && was_default &&
-                 Gui::getViewportPos() == last_view &&
-                 last_cursor.isValid() && cur_cursor.isValid())
-        {
-            Gui::setCursorCoords(last_cursor.x, last_cursor.y, last_cursor.z);
-
-            // Force update of ui state
-            set<df::interface_key> tmp;
-            if (last_cursor.z < 2)
-                tmp.insert(interface_key::CURSOR_UP_Z);
-            else
-                tmp.insert(interface_key::CURSOR_DOWN_Z);
-            INTERPOSE_NEXT(feed)(&tmp);
-            tmp.clear();
-            if (last_cursor.z < 2)
-                tmp.insert(interface_key::CURSOR_DOWN_Z);
-            else
-                tmp.insert(interface_key::CURSOR_UP_Z);
-            INTERPOSE_NEXT(feed)(&tmp);
-        }
-        else if (!is_default && cur_cursor.isValid())
-        {
-            last_cursor = df::coord();
-        }
-    }
-};
-
-IMPLEMENT_VMETHOD_INTERPOSE(stable_cursor_hook, feed);
 
 static int map_temp_mult = -1;
 static int max_heat_ticks = 0;
@@ -1062,10 +1004,6 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
             unit->profession2 = df::profession::TRADER;
         return fix_clothing_ownership(out, unit);
     }
-    else if (cmd == "stable-cursor")
-    {
-        enable_hook(out, INTERPOSE_HOOK(stable_cursor_hook, feed), parameters);
-    }
     else if (cmd == "fast-heat")
     {
         if (parameters.size() < 2)
@@ -1124,8 +1062,20 @@ static command_result tweak(color_ostream &out, vector <string> &parameters)
     }
     else
     {
-        out.printerr("Unrecognized tweak: %s\n", cmd.c_str());
-        return CR_WRONG_USAGE;
+        bool recognized = false;
+        for (auto it = tweak_hooks.begin(); it != tweak_hooks.end(); ++it)
+        {
+            if (it->first == cmd)
+            {
+                recognized = true;
+                enable_hook(out, it->second, parameters);
+            }
+        }
+        if (!recognized)
+        {
+            out.printerr("Unrecognized tweak: %s\n", cmd.c_str());
+            return CR_WRONG_USAGE;
+        }
     }
 
     return CR_OK;
