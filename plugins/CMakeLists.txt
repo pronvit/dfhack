@@ -46,6 +46,11 @@ if (BUILD_DWARFEXPORT)
 #    add_subdirectory (dwarfexport)
 endif()
 
+OPTION(BUILD_DFTERM3 "Build dfterm3 plugin." ON)
+if (BUILD_DFTERM3)
+    add_subdirectory (dfterm3-plugin)
+endif()
+
 OPTION(BUILD_RUBY "Build ruby binding." ON)
 if (BUILD_RUBY)
     add_subdirectory (ruby)
