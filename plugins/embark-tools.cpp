@@ -92,10 +92,10 @@ public:
     virtual std::string getName() = 0;
     virtual std::string getDesc() = 0;
     virtual df::interface_key getToggleKey() = 0;
-    virtual void before_render(start_sitest* screen) = 0;
-    virtual void after_render(start_sitest* screen) = 0;
-    virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel) = 0;
-    virtual void after_feed(start_sitest* screen, ikey_set* input) = 0;
+    virtual void before_render(start_sitest* screen) { };
+    virtual void after_render(start_sitest* screen) { };
+    virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel) { };
+    virtual void after_feed(start_sitest* screen, ikey_set* input) { };
 };
 std::vector<EmbarkTool*> tools;
 
@@ -122,7 +122,6 @@ public:
     virtual std::string getName() { return "Embark anywhere"; }
     virtual std::string getDesc() { return "Allows embarking anywhere on the world map"; }
     virtual df::interface_key getToggleKey() { return df::interface_key::CUSTOM_A; }
-    virtual void before_render(start_sitest* screen) { }
     virtual void after_render(start_sitest* screen)
     {
         auto dim = Screen::getWindowSize();
@@ -140,7 +139,6 @@ public:
             screen->in_embark_normal = 1;
         }
     };
-    virtual void after_feed(start_sitest* screen, ikey_set *input) { };
 };
 
 class NanoEmbark : public EmbarkTool
@@ -150,8 +148,6 @@ public:
     virtual std::string getName() { return "Nano embark"; }
     virtual std::string getDesc() { return "Allows the embark size to be decreased below 2x2"; }
     virtual df::interface_key getToggleKey() { return df::interface_key::CUSTOM_N; }
-    virtual void before_render(start_sitest* screen) { }
-    virtual void after_render(start_sitest* screen) { }
     virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel)
     {
         for (auto iter = input->begin(); iter != input->end(); iter++)
@@ -184,7 +180,6 @@ public:
             }
         }
     };
-    virtual void after_feed(start_sitest* screen, ikey_set* input) { };
 };
 
 class SandIndicator : public EmbarkTool
@@ -225,7 +220,6 @@ public:
     virtual std::string getName() { return "Sand indicator"; }
     virtual std::string getDesc() { return "Displays an indicator when sand is present on the given embark site"; }
     virtual df::interface_key getToggleKey() { return df::interface_key::CUSTOM_S; }
-    virtual void before_render(start_sitest* screen) { }
     virtual void after_render(start_sitest* screen)
     {
         if (dirty)
@@ -238,7 +232,6 @@ public:
             OutputString(COLOR_YELLOW, x, y, indicator);
         }
     }
-    virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel) { };
     virtual void after_feed(start_sitest* screen, ikey_set* input)
     {
         dirty = true;
@@ -291,7 +284,6 @@ public:
             moved_position = false;
         }
     }
-    virtual void after_render(start_sitest* screen) { }
     virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel) {
         for (auto iter = input->begin(); iter != input->end(); iter++)
         {
@@ -326,7 +318,6 @@ public:
             }
         }
     };
-    virtual void after_feed(start_sitest* screen, ikey_set* input) { };
 };
 
 class embark_tools_settings : public dfhack_viewscreen
