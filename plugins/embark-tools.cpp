@@ -465,6 +465,11 @@ struct choose_start_site_hook : df::viewscreen_choose_start_sitest
         Screen::show(new embark_tools_settings);
     }
 
+    inline bool is_valid_page()
+    {
+        return (page >= 0 && page <= 4);
+    }
+
     DEFINE_VMETHOD_INTERPOSE(void, feed, (std::set<df::interface_key> *input))
     {
         bool cancel = false;
@@ -477,7 +482,7 @@ struct choose_start_site_hook : df::viewscreen_choose_start_sitest
         if (cancel)
             return;
         INTERPOSE_NEXT(feed)(input);
-        if (input->count(df::interface_key::CUSTOM_S))
+        if (input->count(df::interface_key::CUSTOM_S) && is_valid_page())
             display_settings();
         FOR_ITER_TOOLS(iter)
         {
