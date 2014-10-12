@@ -408,7 +408,7 @@ protected:
     //bool redo_search;
     string search_string;
 
-private:
+protected:
     int *cursor_pos;
     char select_key;
     bool valid;
@@ -693,10 +693,10 @@ template <class T, class V, int D> V generic_search_hook<T, V, D> ::module;
 
 
 // Hook definition helpers
-#define IMPLEMENT_HOOKS_WITH_ID(screen, module, id) \
+#define IMPLEMENT_HOOKS_WITH_ID(screen, module, id, prio) \
     typedef generic_search_hook<screen, module, id> module##_hook; \
-    template<> IMPLEMENT_VMETHOD_INTERPOSE(module##_hook, feed); \
-    template<> IMPLEMENT_VMETHOD_INTERPOSE(module##_hook, render)
+    template<> IMPLEMENT_VMETHOD_INTERPOSE_PRIO(module##_hook, feed, prio); \
+    template<> IMPLEMENT_VMETHOD_INTERPOSE_PRIO(module##_hook, render, prio)
 
 #define IMPLEMENT_HOOKS(screen, module) \
     typedef generic_search_hook<screen, module> module##_hook; \
@@ -998,6 +998,11 @@ private:
         return true;
     }
 
+    char get_search_select_key()
+    {
+        return 'q';
+    }
+
     vector<df::job*> *get_secondary_list() 
     {
         return &viewscreen->jobs[viewscreen->page];
@@ -1074,15 +1079,24 @@ class trade_search_merc : public trade_search_base
 public:
     virtual void render() const
     {
-        print_search_option(2, 26);
+        if (viewscreen->counteroffer.size() > 0)
+        {
+            // The merchant is proposing a counteroffer.
+            // Not only is there nothing to search,
+            // but the native hotkeys are where we normally write.
+            return;
+        }
+        
+        print_search_option(2, -1);
 
         if (!search_string.empty())
         {
-            make_text_dim(2, 37, 22);
-            make_text_dim(42, gps->dimx-2, 22);
             int32_t x = 2;
             int32_t y = gps->dimy - 3;
-            OutputString(COLOR_YELLOW, x, y, "Note: Clear search to trade");
+            make_text_dim(2, 37, y);
+            make_text_dim(42, gps->dimx-2, y);
+            OutputString(COLOR_LIGHTRED, x, y, string(1, select_key + 'A' - 'a'));
+            OutputString(COLOR_WHITE, x, y, ": Clear search to trade           ");
         }
     }
 
@@ -1108,7 +1122,7 @@ private:
     }
 };
 
-IMPLEMENT_HOOKS_WITH_ID(df::viewscreen_tradegoodsst, trade_search_merc, 1);
+IMPLEMENT_HOOKS_WITH_ID(df::viewscreen_tradegoodsst, trade_search_merc, 1, 100);
 
 
 class trade_search_fort : public trade_search_base
@@ -1116,15 +1130,24 @@ class trade_search_fort : public trade_search_base
 public:
     virtual void render() const
     {
-        print_search_option(42, 26);
+        if (viewscreen->counteroffer.size() > 0)
+        {
+            // The merchant is proposing a counteroffer.
+            // Not only is there nothing to search,
+            // but the native hotkeys are where we normally write.
+            return;
+        }
+        
+        print_search_option(42, -1);
 
         if (!search_string.empty())
         {
-            make_text_dim(2, 37, 22);
-            make_text_dim(42, gps->dimx-2, 22);
             int32_t x = 42;
             int32_t y = gps->dimy - 3;
-            OutputString(COLOR_YELLOW, x, y, "Note: Clear search to trade");
+            make_text_dim(2, 37, y);
+            make_text_dim(42, gps->dimx-2, y);
+            OutputString(COLOR_LIGHTRED, x, y, string(1, select_key + 'A' - 'a'));
+            OutputString(COLOR_WHITE, x, y, ": Clear search to trade           ");
         }
     }
 
@@ -1150,7 +1173,7 @@ private:
     }
 };
 
-IMPLEMENT_HOOKS_WITH_ID(df::viewscreen_tradegoodsst, trade_search_fort, 2);
+IMPLEMENT_HOOKS_WITH_ID(df::viewscreen_tradegoodsst, trade_search_fort, 2, 100);
 
 //
 // END: Trade screen search
@@ -1548,6 +1571,11 @@ private:
             desc += "Inactive";
 
         return desc;
+    }
+
+    char get_search_select_key()
+    {
+        return 'q';
     }
 
     vector<df::unit*> *get_secondary_list() 
