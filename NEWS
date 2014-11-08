@@ -1,6 +1,7 @@
 DFHack Future
+    New scripts:
+        - adaptation: view or set the cavern adaptation level of your citizens
     Fixes:
-        - autotrade: Removed the newly obsolete "Mark all" functionality.
         - search: Adapts to the new trade screen column width
         - tweak fast-trade: Switching the fast-trade keybinding to Shift-Up/Shift-Down, due to Select All conflict
 
@@ -45,7 +46,7 @@ DFHack 0.40.12-r1
 
     New plugins:
         - hotkeys (by Falconne): Shows ingame viewscreen with all dfhack keybindings active in current mode.
-        - automelt: allows marking stockpiles for automelt (i.e. any items placed in stocpile will be designated for melting)
+        - automelt: allows marking stockpiles for automelt (i.e. any items placed in stockpile will be designated for melting)
 
     Misc Improvements:
         - now you can use @ to print things in interactive Lua with subtley different semantics
