@@ -6,11 +6,17 @@
 
 #include "uicommon.h"
 #include "modules/Gui.h"
+#include "modules/Job.h"
+#include "modules/Maps.h"
 #include "modules/Screen.h"
 #include "modules/World.h"
 
 #include "df/building_nest_boxst.h"
+#include "df/item.h"
+#include "df/item_eggst.h"
+#include "df/job.h"
 #include "df/viewscreen_dwarfmodest.h"
+#include "df/unit.h"
 
 #define CONFIG_KEY "nestbox-guard/config"
 #define TOGGLE_KEY df::interface_key::CUSTOM_E
@@ -25,20 +31,62 @@ DFHACK_PLUGIN_IS_ENABLED(is_enabled);
 
 static void load_config();
 static void save_config();
+static void cancel_job(df::job* job);
 
-// From autotrade's WatchedBurrows
-static df::building_nest_boxst* getNestbox(const int32_t id)
+static df::building_nest_boxst* getNestbox (const int32_t id)
 {
     df::building* b = df::building::find(id);
     return virtual_cast<df::building_nest_boxst>(b);
 }
 
+static void forbid_egg (df::item_eggst* egg, bool forbid_state)
+{
+    if (forbid_state)
+    {
+        egg->flags.bits.forbid = true;
+        egg->flags.bits.in_job = false;
+        df::job_list_link* job_link = world->job_list.next;
+        while (job_link != NULL)
+        {
+            df::job* job = job_link->item;
+            for (auto iter = job->items.begin(); iter != job->items.end(); ++iter)
+            {
+                if ((*iter)->item->id == egg->id)
+                {
+                    cancel_job(job);
+                }
+            }
+            job_link = job_link->next;
+        }
+    }
+    else
+    {
+        egg->flags.bits.forbid = false;
+    }
+}
+
+// Adapted from diggingInvaders
+static void cancel_job (df::job* job) {
+    if (job == NULL) {
+        return;
+    }
+
+    df::unit* unit = Job::getWorker(job);
+    if (unit)
+        unit->job.current_job = NULL;
+    if (job->list_link->prev != NULL)
+        job->list_link->prev->next = job->list_link->next;
+    if (job->list_link->next != NULL)
+        job->list_link->next->prev = job->list_link->prev;
+}
+
+// Adapted from autotrade's WatchedBurrows
 class Nestbox
 {
 public:
     int32_t id;
     df::building_nest_boxst* nestbox;
-    bool isValid() { return nestbox != NULL; }
+    bool isValid() { return nestbox != NULL && id == nestbox->id; }
     Nestbox(int32_t id) : id(id)
     {
         nestbox = getNestbox(id);
@@ -95,7 +143,7 @@ public:
         }
     }
 
-    void remove(const df::building_nest_boxst* nestbox)
+    void remove (const df::building_nest_boxst* nestbox)
     {
         for (auto iter = nestboxes.begin(); iter != nestboxes.end(); )
         {
@@ -106,12 +154,12 @@ public:
         }
     }
 
-    void remove(const int32_t id)
+    void remove (const int32_t id)
     {
         remove(getNestbox(id));
     }
 
-    bool contains(const df::building_nest_boxst *nestbox)
+    bool contains (const df::building_nest_boxst *nestbox)
     {
         validate();
         for (auto iter = nestboxes.begin(); iter != nestboxes.end(); ++iter)
@@ -121,6 +169,12 @@ public:
         }
 
         return false;
+    }
+
+    std::vector<Nestbox>* get_nestboxes()
+    {
+        validate();
+        return &nestboxes;
     }
 
 private:
@@ -181,7 +235,7 @@ struct nestbox_guard_dwarfmode_hook : df::viewscreen_dwarfmodest
             auto dims = Gui::getDwarfmodeViewDims();
             int x = dims.menu_x1 + 1;
             int y = (ui->main.mode == df::ui_sidebar_mode::QueryBuilding)
-                ? dims.y2 - 5
+                ? dims.y2 - 3
                 : 18;
             OutputString(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(TOGGLE_KEY));
             OutputString(COLOR_WHITE, x, y, ": Auto-forbid eggs: ");
@@ -217,6 +271,25 @@ static void save_config()
     persistent_config.val() = nestbox_list.serialize();
 }
 
+static void scan_nestboxes()
+{
+    std::vector<Nestbox>* nestboxes = nestbox_list.get_nestboxes();
+    for (auto nb_iter = nestboxes->begin(); nb_iter != nestboxes->end(); ++nb_iter)
+    {
+        Nestbox nb = *nb_iter;
+        if (!nb.isValid())
+            continue;
+        for (auto item_iter = nb.nestbox->contained_items.begin();
+             item_iter != nb.nestbox->contained_items.end(); ++item_iter)
+        {
+            df::item_eggst* egg = virtual_cast<df::item_eggst>((*item_iter)->item);
+            if (!egg)
+                continue;
+            forbid_egg(egg, egg->egg_flags.bits.fertile);
+        }
+    }
+}
+
 DFhackCExport command_result plugin_init (color_ostream& out, std::vector<PluginCommand>& commands)
 {
 #define require_global(name) \
@@ -246,7 +319,7 @@ DFhackCExport command_result plugin_enable (color_ostream& out, bool enable)
             return CR_FAILURE;
         }
         is_enabled = enable;
-        if (Core::getInstance().isMapLoaded())
+        if (Maps::IsValid())
         {
             if (is_enabled)
                 load_config();
@@ -269,5 +342,21 @@ DFhackCExport command_result plugin_onstatechange (color_ostream& out, state_cha
         default:
             break;
     }
+    return CR_OK;
+}
+
+DFhackCExport command_result plugin_onupdate (color_ostream& out)
+{
+    if (!is_enabled || !Maps::IsValid())
+        return CR_OK;
+    if (DFHack::World::ReadPauseState())
+        return CR_OK;
+    static decltype(world->frame_counter) last_frame_count = 0;
+
+    if (world->frame_counter - last_frame_count < 25)
+        return CR_OK;
+    last_frame_count = world->frame_counter;
+
+    scan_nestboxes();
     return CR_OK;
 }
