@@ -20,6 +20,7 @@ using namespace DFHack;
 using df::global::enabler;
 using df::global::gps;
 
+#define DEBUG(s...) DFHack::Core::getInstance().getConsole().print(s)
 #define FOR_ITER_TOOLS(iter) for(auto iter = tools.begin(); iter != tools.end(); iter++)
 
 void update_embark_sidebar (df::viewscreen_choose_start_sitest * screen)
@@ -44,8 +45,8 @@ void get_embark_pos (df::viewscreen_choose_start_sitest * screen,
     x2 = screen->location.embark_pos_max.x,
     y1 = screen->location.embark_pos_min.y,
     y2 = screen->location.embark_pos_max.y,
-    w  = x2 - x1,
-    h  = y2 - y1;
+    w  = x2 - x1 + 1,
+    h  = y2 - y1 + 1;
 }
 
 void set_embark_pos (df::viewscreen_choose_start_sitest * screen,
@@ -55,6 +56,8 @@ void set_embark_pos (df::viewscreen_choose_start_sitest * screen,
     screen->location.embark_pos_max.x = x2;
     screen->location.embark_pos_min.y = y1;
     screen->location.embark_pos_max.y = y2;
+    if (y1 < 0 || y2 > 15 || x1 < 0 || x2 > 15)
+        DEBUG("invalid coords\n");
 }
 
 #define GET_EMBARK_POS(screen, a, b, c, d, e, f) \
@@ -66,15 +69,7 @@ void resize_embark (df::viewscreen_choose_start_sitest * screen, int dx, int dy)
     /* Reproduces DF's embark resizing functionality
      * Local area resizes up and to the right, unless it's already touching the edge
      */
-    //int x1 = screen->location.embark_pos_min.x,
-    //    x2 = screen->location.embark_pos_max.x,
-    //    y1 = screen->location.embark_pos_min.y,
-    //    y2 = screen->location.embark_pos_max.y,
-    //    width = x2 - x1 + dx,
-    //    height = y2 - y1 + dy;
     GET_EMBARK_POS(screen, x1, x2, y1, y2, width, height);
-    width += dx;
-    height += dy;
     if (x1 == x2 && dx == -1)
         dx = 0;
     if (y1 == y2 && dy == -1)
@@ -347,7 +342,6 @@ public:
     };
 };
 
-#define DEBUG(s...) DFHack::Core::getInstance().getConsole().print(s)
 class MouseControl : public EmbarkTool
 {
 protected:
@@ -362,6 +356,13 @@ protected:
     bool in_local_edge_resize_x;
     bool in_local_edge_resize_y;
     bool in_local_corner_resize;
+    // These keep track of where the embark location would be (i.e. if
+    // the mouse is dragged out of the local embark area), to prevent
+    // the mouse from moving the actual area when it's 20+ tiles away
+    int local_overshoot_x1;
+    int local_overshoot_x2;
+    int local_overshoot_y1;
+    int local_overshoot_y2;
     inline bool in_local_adjust()
     {
         return in_local_move || in_local_edge_resize_x || in_local_edge_resize_y ||
@@ -401,15 +402,21 @@ protected:
                 {
                     in_local_move = true;
                     base_max_x = base_max_y = false;
+                    local_overshoot_x1 = x1;
+                    local_overshoot_x2 = x2;
+                    local_overshoot_y1 = y1;
+                    local_overshoot_y2 = y2;
                 }
             }
         }
     }
     void mouse_move(start_sitest* screen, int x, int y)
     {
-        if (x == -1 || y == -1)
-            return;
         GET_EMBARK_POS(screen, x1, x2, y1, y2, width, height);
+        if (x == -1 && prev_x > (2 + 16))
+            x = gps->dimx;
+        if (y == -1 && prev_y > (1 + 16))
+            y = gps->dimy;
         if (in_local_corner_resize)
         {
             x -= 1; y -= 2;
@@ -433,8 +440,75 @@ protected:
                 std::swap(y1, y2);
                 base_max_y = !base_max_y;
             }
-            set_embark_pos(screen, x1, x2, y1, y2);
         }
+        else if (in_local_edge_resize_x)
+        {
+            x -= 1;
+            x = std::max(0, std::min(15, x));
+            if (base_max_x)
+                x2 = x;
+            else
+                x1 = x;
+            if (x1 > x2)
+            {
+                std::swap(x1, x2);
+                base_max_x = !base_max_x;
+            }
+        }
+        else if (in_local_edge_resize_y)
+        {
+            y -= 1;
+            y = std::max(0, std::min(15, y));
+            if (base_max_y)
+                y2 = y;
+            else
+                y1 = y;
+            if (y1 > y2)
+            {
+                std::swap(y1, y2);
+                base_max_y = !base_max_y;
+            }
+        }
+        else if (in_local_move)
+        {
+            int dx = x - prev_x;
+            int dy = y - prev_y;
+            local_overshoot_x1 += dx;
+            local_overshoot_x2 += dx;
+            local_overshoot_y1 += dy;
+            local_overshoot_y2 += dy;
+            if (local_overshoot_x1 < 0)
+            {
+                x1 = 0;
+                x2 = width - 1;
+            }
+            else if (local_overshoot_x2 > 15)
+            {
+                x1 = 15 - (width - 1);
+                x2 = 15;
+            }
+            else
+            {
+                x1 = local_overshoot_x1;
+                x2 = local_overshoot_x2;
+            }
+            if (local_overshoot_y1 < 0)
+            {
+                y1 = 0;
+                y2 = height - 1;
+            }
+            else if (local_overshoot_y2 > 15)
+            {
+                y1 = 15 - (height - 1);
+                y2 = 15;
+            }
+            else
+            {
+                y1 = local_overshoot_y1;
+                y2 = local_overshoot_y2;
+            }
+        }
+        set_embark_pos(screen, x1, x2, y1, y2);
     }
 public:
     MouseControl()
@@ -447,7 +521,11 @@ public:
         in_local_move(false),
         in_local_edge_resize_x(false),
         in_local_edge_resize_y(false),
-        in_local_corner_resize(false)
+        in_local_corner_resize(false),
+        local_overshoot_x1(0),
+        local_overshoot_x2(0),
+        local_overshoot_y1(0),
+        local_overshoot_y2(0)
     { }
     virtual std::string getId() { return "mouse"; }
     virtual std::string getName() { return "Mouse control"; }
@@ -502,8 +580,9 @@ public:
             EmbarkTool* t = *iter;
             x = min_x + 2;
             OutputString(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(t->getToggleKey()));
+            OutputString(COLOR_WHITE, x, y, ": " + t->getName());
             OutputString(t->getEnabled() ? COLOR_GREEN : COLOR_RED, x, y,
-                ": " + t->getName() + (t->getEnabled() ? ": Enabled" : ": Disabled"));
+                         t->getEnabled() ? ": Enabled" : ": Disabled");
             y++;
         }
     };
