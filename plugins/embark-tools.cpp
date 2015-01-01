@@ -20,7 +20,6 @@ using namespace DFHack;
 using df::global::enabler;
 using df::global::gps;
 
-#define DEBUG(s...) DFHack::Core::getInstance().getConsole().print(s)
 #define FOR_ITER_TOOLS(iter) for(auto iter = tools.begin(); iter != tools.end(); iter++)
 
 void update_embark_sidebar (df::viewscreen_choose_start_sitest * screen)
@@ -56,8 +55,6 @@ void set_embark_pos (df::viewscreen_choose_start_sitest * screen,
     screen->location.embark_pos_max.x = x2;
     screen->location.embark_pos_min.y = y1;
     screen->location.embark_pos_max.y = y2;
-    if (y1 < 0 || y2 > 15 || x1 < 0 || x2 > 15)
-        DEBUG("invalid coords\n");
 }
 
 #define GET_EMBARK_POS(screen, a, b, c, d, e, f) \
@@ -409,17 +406,28 @@ protected:
                 }
             }
         }
+        update_embark_sidebar(screen);
     }
     void mouse_move(start_sitest* screen, int x, int y)
     {
         GET_EMBARK_POS(screen, x1, x2, y1, y2, width, height);
         if (x == -1 && prev_x > (2 + 16))
+        {
             x = gps->dimx;
+            gps->mouse_x = x - 1;
+        }
         if (y == -1 && prev_y > (1 + 16))
+        {
             y = gps->dimy;
+            gps->mouse_y = y - 1;
+        }
+        if (in_local_corner_resize || in_local_edge_resize_x || in_local_edge_resize_y)
+        {
+            x -= 1;
+            y -= 2;
+        }
         if (in_local_corner_resize)
         {
-            x -= 1; y -= 2;
             x = std::max(0, std::min(15, x));
             y = std::max(0, std::min(15, y));
             if (base_max_x)
@@ -443,7 +451,6 @@ protected:
         }
         else if (in_local_edge_resize_x)
         {
-            x -= 1;
             x = std::max(0, std::min(15, x));
             if (base_max_x)
                 x2 = x;
@@ -457,7 +464,6 @@ protected:
         }
         else if (in_local_edge_resize_y)
         {
-            y -= 1;
             y = std::max(0, std::min(15, y));
             if (base_max_y)
                 y2 = y;
@@ -531,7 +537,80 @@ public:
     virtual std::string getName() { return "Mouse control"; }
     virtual std::string getDesc() { return "Implements mouse controls on the embark screen"; }
     virtual df::interface_key getToggleKey() { return df::interface_key::CUSTOM_M; }
-    virtual void after_render(start_sitest* screen) { }
+    virtual void after_render(start_sitest* screen)
+    {
+        GET_EMBARK_POS(screen, x1, x2, y1, y2, width, height);
+        int mouse_x = gps->mouse_x, mouse_y = gps->mouse_y;
+        int local_x = prev_x - 1;
+        int local_y = prev_y - 2;
+        if (local_x >= x1 && local_x <= x2 && local_y >= y1 && local_y <= y2)
+        {
+            int screen_x1 = x1 + 1;
+            int screen_x2 = x2 + 1;
+            int screen_y1 = y1 + 2;
+            int screen_y2 = y2 + 2;
+            UIColor fg = in_local_adjust() ? COLOR_GREY : COLOR_DARKGREY;
+            Screen::Pen corner_ul = Screen::Pen((char)201, fg, COLOR_BLACK);
+            Screen::Pen corner_ur = Screen::Pen((char)187, fg, COLOR_BLACK);
+            Screen::Pen corner_dl = Screen::Pen((char)200, fg, COLOR_BLACK);
+            Screen::Pen corner_dr = Screen::Pen((char)188, fg, COLOR_BLACK);
+            Screen::Pen border_ud = Screen::Pen((char)205, fg, COLOR_BLACK);
+            Screen::Pen border_lr = Screen::Pen((char)186, fg, COLOR_BLACK);
+            if (in_local_corner_resize ||
+                ((local_x == x1 || local_x == x2) && (local_y == y1 || local_y == y2)))
+            {
+                if (local_x == x1 && local_y == y1)
+                    Screen::paintTile(corner_ul, screen_x1, screen_y1);
+                else if (local_x == x2 && local_y == y1)
+                    Screen::paintTile(corner_ur, screen_x2, screen_y1);
+                else if (local_x == x1 && local_y == y2)
+                    Screen::paintTile(corner_dl, screen_x1, screen_y2);
+                else if (local_x == x2 && local_y == y2)
+                    Screen::paintTile(corner_dr, screen_x2, screen_y2);
+            }
+            else if (in_local_edge_resize_x || local_x == x1 || local_x == x2)
+            {
+                if ((in_local_edge_resize_x && !base_max_x) || local_x == x1)
+                {
+                    Screen::paintTile(corner_ul, screen_x1, screen_y1);
+                    for (int i = screen_y1 + 1; i <= screen_y2 - 1; ++i)
+                        Screen::paintTile(border_lr, screen_x1, i);
+                    Screen::paintTile(corner_dl, screen_x1, screen_y2);
+                }
+                else
+                {
+                    Screen::paintTile(corner_ur, screen_x2, screen_y1);
+                    for (int i = screen_y1 + 1; i <= screen_y2 - 1; ++i)
+                        Screen::paintTile(border_lr, screen_x2, i);
+                    Screen::paintTile(corner_dr, screen_x2, screen_y2);
+                }
+            }
+            else if (in_local_edge_resize_y || local_y == y1 || local_y == y2)
+            {
+                if ((in_local_edge_resize_y && !base_max_y) || local_y == y1)
+                {
+                    Screen::paintTile(corner_ul, screen_x1, screen_y1);
+                    for (int i = screen_x1 + 1; i <= screen_x2 - 1; ++i)
+                        Screen::paintTile(border_ud, i, screen_y1);
+                    Screen::paintTile(corner_ur, screen_x2, screen_y1);
+                }
+                else
+                {
+                    Screen::paintTile(corner_dl, screen_x1, screen_y2);
+                    for (int i = screen_x1 + 1; i <= screen_x2 - 1; ++i)
+                        Screen::paintTile(border_ud, i, screen_y2);
+                    Screen::paintTile(corner_dr, screen_x2, screen_y2);
+                }
+            }
+            else
+            {
+                Screen::paintTile(corner_ul, screen_x1, screen_y1);
+                Screen::paintTile(corner_ur, screen_x2, screen_y1);
+                Screen::paintTile(corner_dl, screen_x1, screen_y2);
+                Screen::paintTile(corner_dr, screen_x2, screen_y2);
+            }
+        }
+    }
     virtual void after_mouse_event(start_sitest* screen)
     {
         if (enabler->mouse_lbut != prev_lbut)
