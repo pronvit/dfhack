@@ -3,6 +3,7 @@
 #include "DataDefs.h"
 #include "Export.h"
 #include "PluginManager.h"
+#include "MiscUtils.h"
 
 #include "modules/Screen.h"
 #include "modules/Gui.h"
@@ -16,6 +17,8 @@
 #include "df/interface_key.h"
 
 using namespace DFHack;
+using df::global::enabler;
+using df::global::gps;
 
 #define FOR_ITER_TOOLS(iter) for(auto iter = tools.begin(); iter != tools.end(); iter++)
 
@@ -34,17 +37,44 @@ void update_embark_sidebar (df::viewscreen_choose_start_sitest * screen)
     }
 }
 
+void get_embark_pos (df::viewscreen_choose_start_sitest * screen,
+                     int& x1, int& x2, int& y1, int& y2, int& w, int& h)
+{
+    x1 = screen->location.embark_pos_min.x,
+    x2 = screen->location.embark_pos_max.x,
+    y1 = screen->location.embark_pos_min.y,
+    y2 = screen->location.embark_pos_max.y,
+    w  = x2 - x1,
+    h  = y2 - y1;
+}
+
+void set_embark_pos (df::viewscreen_choose_start_sitest * screen,
+                     int x1, int x2, int y1, int y2)
+{
+    screen->location.embark_pos_min.x = x1;
+    screen->location.embark_pos_max.x = x2;
+    screen->location.embark_pos_min.y = y1;
+    screen->location.embark_pos_max.y = y2;
+}
+
+#define GET_EMBARK_POS(screen, a, b, c, d, e, f) \
+    int a, b, c, d, e, f; \
+    get_embark_pos(screen, a, b, c, d, e, f);
+
 void resize_embark (df::viewscreen_choose_start_sitest * screen, int dx, int dy)
 {
     /* Reproduces DF's embark resizing functionality
      * Local area resizes up and to the right, unless it's already touching the edge
      */
-    int x1 = screen->location.embark_pos_min.x,
-        x2 = screen->location.embark_pos_max.x,
-        y1 = screen->location.embark_pos_min.y,
-        y2 = screen->location.embark_pos_max.y,
-        width = x2 - x1 + dx,
-        height = y2 - y1 + dy;
+    //int x1 = screen->location.embark_pos_min.x,
+    //    x2 = screen->location.embark_pos_max.x,
+    //    y1 = screen->location.embark_pos_min.y,
+    //    y2 = screen->location.embark_pos_max.y,
+    //    width = x2 - x1 + dx,
+    //    height = y2 - y1 + dy;
+    GET_EMBARK_POS(screen, x1, x2, y1, y2, width, height);
+    width += dx;
+    height += dy;
     if (x1 == x2 && dx == -1)
         dx = 0;
     if (y1 == y2 && dy == -1)
@@ -66,11 +96,7 @@ void resize_embark (df::viewscreen_choose_start_sitest * screen, int dx, int dy)
     }
     y2 = std::min(15, y2);
 
-    screen->location.embark_pos_min.x = x1;
-    screen->location.embark_pos_max.x = x2;
-    screen->location.embark_pos_min.y = y1;
-    screen->location.embark_pos_max.y = y2;
-
+    set_embark_pos(screen, x1, x2, y1, y2);
     update_embark_sidebar(screen);
 }
 
@@ -96,6 +122,7 @@ public:
     virtual void after_render(start_sitest* screen) { };
     virtual void before_feed(start_sitest* screen, ikey_set* input, bool &cancel) { };
     virtual void after_feed(start_sitest* screen, ikey_set* input) { };
+    virtual void after_mouse_event(start_sitest* screen) { };
 };
 std::vector<EmbarkTool*> tools;
 
@@ -320,6 +347,129 @@ public:
     };
 };
 
+#define DEBUG(s...) DFHack::Core::getInstance().getConsole().print(s)
+class MouseControl : public EmbarkTool
+{
+protected:
+    // Used for event handling
+    int prev_x;
+    int prev_y;
+    bool prev_lbut;
+    // Used for controls
+    bool base_max_x;
+    bool base_max_y;
+    bool in_local_move;
+    bool in_local_edge_resize_x;
+    bool in_local_edge_resize_y;
+    bool in_local_corner_resize;
+    inline bool in_local_adjust()
+    {
+        return in_local_move || in_local_edge_resize_x || in_local_edge_resize_y ||
+            in_local_corner_resize;
+    }
+    void lbut_press(start_sitest* screen, bool pressed, int x, int y)
+    {
+        GET_EMBARK_POS(screen, x1, x2, y1, y2, width, height);
+        in_local_move = in_local_edge_resize_x = in_local_edge_resize_y =
+            in_local_corner_resize = false;
+        if (pressed)
+        {
+            if (x >= 1 && x <= 16 && y >= 2 && y <= 17)
+            {
+                // Local embark - translate to local map coordinates
+                x -= 1;
+                y -= 2;
+                if ((x == x1 || x == x2) && (y == y1 || y == y2))
+                {
+                    in_local_corner_resize = true;
+                    base_max_x = (x == x2);
+                    base_max_y = (y == y2);
+                }
+                else if (x == x1 || x == x2)
+                {
+                    in_local_edge_resize_x = true;
+                    base_max_x = (x == x2);
+                    base_max_y = false;
+                }
+                else if (y == y1 || y == y2)
+                {
+                    in_local_edge_resize_y = true;
+                    base_max_x = false;
+                    base_max_y = (y == y2);
+                }
+                else if (x > x1 && x < x2 && y > y1 && y < y2)
+                {
+                    in_local_move = true;
+                    base_max_x = base_max_y = false;
+                }
+            }
+        }
+    }
+    void mouse_move(start_sitest* screen, int x, int y)
+    {
+        if (x == -1 || y == -1)
+            return;
+        GET_EMBARK_POS(screen, x1, x2, y1, y2, width, height);
+        if (in_local_corner_resize)
+        {
+            x -= 1; y -= 2;
+            x = std::max(0, std::min(15, x));
+            y = std::max(0, std::min(15, y));
+            if (base_max_x)
+                x2 = x;
+            else
+                x1 = x;
+            if (base_max_y)
+                y2 = y;
+            else
+                y1 = y;
+            if (x1 > x2)
+            {
+                std::swap(x1, x2);
+                base_max_x = !base_max_x;
+            }
+            if (y1 > y2)
+            {
+                std::swap(y1, y2);
+                base_max_y = !base_max_y;
+            }
+            set_embark_pos(screen, x1, x2, y1, y2);
+        }
+    }
+public:
+    MouseControl()
+        :EmbarkTool(),
+        prev_x(0),
+        prev_y(0),
+        prev_lbut(false),
+        base_max_x(false),
+        base_max_y(false),
+        in_local_move(false),
+        in_local_edge_resize_x(false),
+        in_local_edge_resize_y(false),
+        in_local_corner_resize(false)
+    { }
+    virtual std::string getId() { return "mouse"; }
+    virtual std::string getName() { return "Mouse control"; }
+    virtual std::string getDesc() { return "Implements mouse controls on the embark screen"; }
+    virtual df::interface_key getToggleKey() { return df::interface_key::CUSTOM_M; }
+    virtual void after_render(start_sitest* screen) { }
+    virtual void after_mouse_event(start_sitest* screen)
+    {
+        if (enabler->mouse_lbut != prev_lbut)
+        {
+            lbut_press(screen, enabler->mouse_lbut, gps->mouse_x, gps->mouse_y);
+        }
+        if (gps->mouse_x != prev_x || gps->mouse_y != prev_y)
+        {
+            mouse_move(screen, gps->mouse_x, gps->mouse_y);
+        }
+        prev_lbut = enabler->mouse_lbut;
+        prev_x = gps->mouse_x;
+        prev_y = gps->mouse_y;
+    };
+};
+
 class embark_tools_settings : public dfhack_viewscreen
 {
 public:
@@ -352,8 +502,8 @@ public:
             EmbarkTool* t = *iter;
             x = min_x + 2;
             OutputString(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(t->getToggleKey()));
-            OutputString(COLOR_WHITE, x, y, ": " + t->getName() +
-                         (t->getEnabled() ? ": Enabled" : ": Disabled"));
+            OutputString(t->getEnabled() ? COLOR_GREEN : COLOR_RED, x, y,
+                ": " + t->getName() + (t->getEnabled() ? ": Enabled" : ": Disabled"));
             y++;
         }
     };
@@ -427,28 +577,24 @@ struct choose_start_site_hook : df::viewscreen_choose_start_sitest
             y = dim.y - 5;
         OutputString(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(df::interface_key::CUSTOM_S));
         OutputString(COLOR_WHITE, x, y, ": Enabled: ");
-        std::list<std::string> parts;
-        FOR_ITER_TOOLS(iter)
+        std::vector<std::string> parts;
+        FOR_ITER_TOOLS(it)
         {
-            EmbarkTool* tool = *iter;
-            if (tool->getEnabled())
-            {
-                parts.push_back(tool->getName());
-                parts.push_back(", ");
-            }
+            if ((*it)->getEnabled())
+                parts.push_back((*it)->getName());
         }
         if (parts.size())
         {
-            parts.pop_back();  // Remove trailing comma
-            for (auto iter = parts.begin(); iter != parts.end(); iter++)
+            std::string label = join_strings(", ", parts);
+            if (label.size() > dim.x - x - 1)
             {
-                OutputString(COLOR_LIGHTMAGENTA, x, y, *iter);
+                label.resize(dim.x - x - 1 - 3);
+                label.append("...");
             }
+            OutputString(COLOR_LIGHTMAGENTA, x, y, label);
         }
         else
-        {
             OutputString(COLOR_LIGHTMAGENTA, x, y, "(none)");
-        }
     }
 
     void display_settings()
@@ -511,6 +657,7 @@ command_result embark_tools_cmd (color_ostream &out, std::vector <std::string> &
 DFhackCExport command_result plugin_init (color_ostream &out, std::vector <PluginCommand> &commands)
 {
     tools.push_back(new EmbarkAnywhere);
+    tools.push_back(new MouseControl);
     tools.push_back(new NanoEmbark);
     tools.push_back(new SandIndicator);
     tools.push_back(new StablePosition);
@@ -547,6 +694,35 @@ DFhackCExport command_result plugin_enable (color_ostream &out, bool enable)
             return CR_FAILURE;
         is_enabled = enable;
     }
+    return CR_OK;
+}
+
+DFhackCExport command_result plugin_onupdate (color_ostream &out)
+{
+    static int8_t mask = 0;
+    static decltype(gps->mouse_x) prev_x = -1;
+    static decltype(gps->mouse_y) prev_y = -1;
+    df::viewscreen* parent = DFHack::Gui::getCurViewscreen();
+    VIRTUAL_CAST_VAR(screen, df::viewscreen_choose_start_sitest, parent);
+    if (!screen)
+        return CR_OK;
+    int8_t new_mask = (enabler->mouse_lbut << 1) |
+                      (enabler->mouse_rbut << 2) |
+                      (enabler->mouse_lbut_down << 3) |
+                      (enabler->mouse_rbut_down << 4) |
+                      (enabler->mouse_lbut_lift << 5) |
+                      (enabler->mouse_rbut_lift << 6);
+    if (mask != new_mask || prev_x != gps->mouse_x || prev_y != gps->mouse_y)
+    {
+        FOR_ITER_TOOLS(iter)
+        {
+            if ((*iter)->getEnabled())
+                (*iter)->after_mouse_event(screen);
+        }
+    }
+    mask = new_mask;
+    prev_x = gps->mouse_x;
+    prev_y = gps->mouse_y;
     return CR_OK;
 }
 
