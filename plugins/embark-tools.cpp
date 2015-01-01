@@ -659,9 +659,9 @@ public:
             EmbarkTool* t = *iter;
             x = min_x + 2;
             OutputString(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(t->getToggleKey()));
-            OutputString(COLOR_WHITE, x, y, ": " + t->getName());
+            OutputString(COLOR_WHITE, x, y, ": " + t->getName() + ": ");
             OutputString(t->getEnabled() ? COLOR_GREEN : COLOR_RED, x, y,
-                         t->getEnabled() ? ": Enabled" : ": Disabled");
+                         t->getEnabled() ? "Enabled" : "Disabled");
             y++;
         }
     };
