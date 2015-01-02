@@ -33,6 +33,7 @@ distribution.
 #include "Error.h"
 #include "VersionInfo.h"
 #include "tinythread.h"
+#include "jsonxx.h"
 // must be last due to MS stupidity
 #include "DataDefs.h"
 #include "DataIdentity.h"
@@ -1988,6 +1989,85 @@ static const LuaWrapper::FunctionReg dfhack_filesystem_module[] = {
     {NULL, NULL}
 };
 
+/*****    JSON module  *****/
+
+static void json_load_array(lua_State *L, jsonxx::Array* array);
+static void json_load_object(lua_State *L, jsonxx::Object *object);
+
+static void json_load_array(lua_State *L, jsonxx::Array* array)
+{
+    using namespace jsonxx;
+    lua_newtable(L);
+    for (int i = 0; i < array->size(); ++i)
+    {
+        lua_pushinteger(L, i + 1);
+        if (array->has<Boolean>(i))
+            lua_pushboolean(L, array->get<Boolean>(i));
+        else if (array->has<Number>(i))
+            lua_pushnumber(L, array->get<Number>(i));
+        else if (array->has<String>(i))
+            lua_pushstring(L, array->get<String>(i).c_str());
+        else if (array->has<Array>(i))
+            json_load_array(L, &array->get<Array>(i));
+        else if (array->has<Object>(i))
+            json_load_object(L, &array->get<Object>(i));
+        else
+            lua_pushnil(L);
+        lua_settable(L, -3);
+    }
+}
+
+static void json_load_object(lua_State *L, jsonxx::Object *object)
+{
+    using namespace jsonxx;
+    lua_newtable(L);
+    std::map<std::string, Value*> kv_map = object->kv_map();
+    for (auto it = kv_map.begin(); it != kv_map.end(); ++it)
+    {
+        lua_pushstring(L, it->first.c_str());
+        Value val = *it->second;
+        if (val.is<Boolean>())
+            lua_pushboolean(L, val.get<Boolean>());
+        else if (val.is<Number>())
+            lua_pushnumber(L, val.get<Number>());
+        else if (val.is<String>())
+            lua_pushstring(L, val.get<String>().c_str());
+        else if (val.is<Array>())
+            json_load_array(L, &val.get<Array>());
+        else if (val.is<Object>())
+            json_load_object(L, &val.get<Object>());
+        else
+            lua_pushnil(L);
+        lua_settable(L, -3);
+    }
+}
+
+static int json_loads(lua_State *L)
+{
+    using namespace jsonxx;
+    std::string input = luaL_checkstring(L, 1);
+    Object object;
+    Array array;
+    if (object.parse(input))
+        json_load_object(L, &object);
+    else if (array.parse(input))
+        json_load_array(L, &array);
+    else
+        luaL_error(L, "Invalid JSON literal");
+    return 1;
+}
+
+static int json_dumps(lua_State *L)
+{
+    lua_pushstring(L, "foo");
+    return 0;
+}
+
+static const luaL_Reg dfhack_json_funcs[] = {
+    { "loadString", json_loads },
+    { "dumpString", json_dumps },
+    { NULL, NULL }
+};
 
 /***** Internal module *****/
 
@@ -2391,5 +2471,6 @@ void OpenDFHackApi(lua_State *state)
     OpenModule(state, "constructions", dfhack_constructions_module);
     OpenModule(state, "screen", dfhack_screen_module, dfhack_screen_funcs);
     OpenModule(state, "filesystem", dfhack_filesystem_module);
+    OpenModule(state, "json", NULL, dfhack_json_funcs);
     OpenModule(state, "internal", dfhack_internal_module, dfhack_internal_funcs);
 }
