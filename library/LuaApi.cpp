@@ -1991,6 +1991,40 @@ static const LuaWrapper::FunctionReg dfhack_filesystem_module[] = {
 
 /*****    JSON module  *****/
 
+    static void stackDump (lua_State *L, int line) {
+        printf("--- stack dump, line %i ---\n", line);
+      int i;
+      int top = lua_gettop(L);
+      for (i = -top; i <= top; i++) {  /* repeat for each level */
+        if (!i) continue;
+        int t = lua_type(L, i);
+        switch (t) {
+
+          case LUA_TSTRING:  /* strings */
+            printf("(%d) \"%s\"\n", i, lua_tostring(L, i));
+            break;
+
+          case LUA_TBOOLEAN:  /* booleans */
+            printf("(%d) %s\n", i, lua_toboolean(L, i) ? "true" : "false");
+            break;
+
+          case LUA_TNUMBER:  /* numbers */
+            printf("(%d) %g\n", i, lua_tonumber(L, i));
+            break;
+
+          default:  /* other values */
+            printf("(%d) %s\n", i, lua_typename(L, t));
+            break;
+
+        }
+        //printf("  ");  /* put a separator */
+      }
+      //printf("\n");  /* end the listing */
+      printf("------------------\n\n");
+      fflush(stdout);
+    }
+#define STACK_DUMP(L) stackDump(L,  __LINE__)
+
 static void json_load_array(lua_State *L, jsonxx::Array* array);
 static void json_load_object(lua_State *L, jsonxx::Object *object);
 
@@ -2057,10 +2091,147 @@ static int json_loads(lua_State *L)
     return 1;
 }
 
+static bool json_table_has_string_keys(lua_State *L, int index)
+{
+    lua_pushnil(L);
+    while (lua_next(L, index))
+    {
+        int is_int = 0;
+        double key = lua_tonumberx(L, -2, &is_int);
+        //STACK_DUMP(L);
+        lua_pop(L, 1);
+        if (!is_int || key != (int)key || key < 1)
+        {
+            lua_pop(L, 1);
+            return true;
+        }
+    }
+    return false;
+}
+
+static jsonxx::Array json_dump_array(lua_State *L, int index);
+static jsonxx::Object json_dump_object(lua_State *L, int index);
+
+static jsonxx::Array json_dump_array(lua_State *L, int index)
+{
+    using namespace jsonxx;
+    luaL_checktype(L, index, LUA_TTABLE);
+    Array array;
+    //lua_pushnil(L);
+    //while (lua_next(L, index))
+    for (int i = 1; i <= lua_rawlen(L, index); ++i)
+    {
+        STACK_DUMP(L);
+        lua_rawgeti(L, 1, i);
+        int type = lua_type(L, -1);
+        STACK_DUMP(L);
+        switch (type)
+        {
+            case LUA_TNIL:
+                array << Null();
+                break;
+            case LUA_TBOOLEAN:
+                array << (bool)lua_toboolean(L, -1);
+                break;
+            case LUA_TNUMBER:
+                array << (double)lua_tonumber(L, -1);
+                break;
+            case LUA_TSTRING:
+                array << std::string(lua_tostring(L, -1));
+                break;
+            case LUA_TTABLE:
+                if (json_table_has_string_keys(L, -1))
+                    array << json_dump_object(L, -1);
+                else
+                    array << json_dump_array(L, -1);
+                break;
+            default:
+                luaL_error(L, "Could not convert value of type '%s' to JSON", lua_typename(L, type));
+                break;
+        }
+        STACK_DUMP(L);
+        lua_pop(L, 1);
+    }
+    return array;
+}
+
+static jsonxx::Object json_dump_object(lua_State *L, int index)
+{
+    using namespace jsonxx;
+    luaL_checktype(L, index, LUA_TTABLE);
+    Object object;
+    lua_pushnil(L);
+    while (lua_next(L, index))
+    {
+        STACK_DUMP(L);
+        int type = lua_type(L, -1);
+//        STACK_DUMP(L);
+        object << std::string(lua_tostring(L, -2));
+        switch (type)
+        {
+            case LUA_TNIL:
+                object << Null();
+                break;
+            case LUA_TBOOLEAN:
+                object << (bool)lua_toboolean(L, -1);
+                break;
+            case LUA_TNUMBER:
+                object << (double)lua_tonumber(L, -1);
+                break;
+            case LUA_TSTRING:
+                object << std::string(lua_tostring(L, -1));
+                break;
+            case LUA_TTABLE:
+                if (json_table_has_string_keys(L, -1))
+                    object << json_dump_object(L, -1);
+                else
+                    object << json_dump_array(L, -1);
+                break;
+            default:
+                luaL_error(L, "Could not convert value of type '%s' to JSON", lua_typename(L, type));
+                break;
+        }
+        STACK_DUMP(L);
+        lua_pop(L, 1);
+    }
+    return object;
+}
+
 static int json_dumps(lua_State *L)
 {
-    lua_pushstring(L, "foo");
-    return 0;
+    luaL_checkany(L, 1);
+    int type = lua_type(L, 1);
+    switch (type)
+    {
+        case LUA_TNIL:
+            lua_pushstring(L, "null");
+            break;
+        case LUA_TBOOLEAN:
+            lua_pushfstring(L, "%s", lua_toboolean(L, 1) ? "true" : "false");
+            break;
+        case LUA_TNUMBER:
+            lua_pushfstring(L, "%f", lua_tonumber(L, 1));
+            break;
+        case LUA_TSTRING:
+            lua_pushfstring(L, "\"%s\"", lua_tostring(L, 1));
+            break;
+        case LUA_TTABLE:
+            if (json_table_has_string_keys(L, 1))
+            {
+                jsonxx::Object object = json_dump_object(L, 1);
+                lua_pushstring(L, object.json().c_str());
+            }
+            else
+            {
+                jsonxx::Array array = json_dump_array(L, 1);
+                lua_pushstring(L, array.json().c_str());
+            }
+            break;
+        default:
+            luaL_error(L, "Could not convert value of type '%s' to JSON", lua_typename(L, type));
+            break;
+    }
+    return 1;
 }
 
 static const luaL_Reg dfhack_json_funcs[] = {
