@@ -47,6 +47,7 @@ distribution.
 #include "df/block_square_event_grassst.h"
 #include "df/block_square_event_spoorst.h"
 #include "df/block_square_event_item_spatterst.h"
+#include "df/block_square_event_designation_priorityst.h"
 #include "df/tile_liquid.h"
 #include "df/tile_dig_designation.h"
 #include "df/tile_traffic.h"
@@ -181,7 +182,7 @@ extern DFHACK_EXPORT bool IsValid();
  * Method for reading the geological surrounding of the currently loaded region.
  * assign is a reference to an array of nine vectors of unsigned words that are to be filled with the data
  * array is indexed by the BiomeOffset enum
- * 
+ *
  * I omitted resolving the layer matgloss in this API, because it would
  * introduce overhead by calling some method for each tile. You have to do it
  * yourself.
@@ -307,7 +308,8 @@ extern DFHACK_EXPORT bool SortBlockEvents(df::map_block *block,
     std::vector<df::block_square_event_grassst *>* grass = 0,
     std::vector<df::block_square_event_world_constructionst *>* constructions = 0,
     std::vector<df::block_square_event_spoorst *>* spoors = 0,
-    std::vector<df::block_square_event_item_spatterst *>* items = 0
+    std::vector<df::block_square_event_item_spatterst *>* items = 0,
+    std::vector<df::block_square_event_designation_priorityst *>* designation_priorities = 0
 );
 
 /// remove a block event from the block by address

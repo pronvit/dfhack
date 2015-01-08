@@ -276,6 +276,11 @@ public:
         return true;
     }
 
+    bool setDesignationPriorityAt(df::coord2d p, int32_t priority)
+    {
+        if (!valid) return false;
+    }
+
     df::tile_occupancy OccupancyAt(df::coord2d p)
     {
         return index_tile<df::tile_occupancy>(occupancy,p);
@@ -372,12 +377,17 @@ private:
         t_blockmaterials mat_type;
         t_blockmaterials mat_index;
     };
+    struct PriorityInfo {
+        df::tile_bitmask dirty;
+        int32_t priority[16][16];
+    };
     struct TileInfo {
         df::tile_bitmask dirty_raw;
         t_tilearr raw_tiles;
 
         IceInfo *ice_info;
         ConInfo *con_info;
+        PriorityInfo *priority_info;
 
         t_tilearr base_tiles;
 
@@ -386,6 +396,7 @@ private:
 
         void init_iceinfo();
         void init_coninfo();
+        void init_priorityinfo();
 
         void set_base_tile(df::coord2d pos, df::tiletype tile);
     };

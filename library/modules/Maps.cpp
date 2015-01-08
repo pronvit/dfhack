@@ -204,7 +204,7 @@ df::map_block *Maps::ensureTileBlock (int32_t x, int32_t y, int32_t z)
             slot->temperature_1[tx][ty] = column[z2]->temperature_1[tx][ty];
             slot->temperature_2[tx][ty] = column[z2]->temperature_2[tx][ty];
         }
-    
+
     df::global::world->map.map_blocks.push_back(slot);
     return slot;
 }
@@ -390,7 +390,8 @@ bool Maps::SortBlockEvents(df::map_block *block,
     vector <df::block_square_event_grassst *> *grasses,
     vector <df::block_square_event_world_constructionst *> *constructions,
     vector <df::block_square_event_spoorst *> *spoors,
-    vector <df::block_square_event_item_spatterst *> *items)
+    vector <df::block_square_event_item_spatterst *> *items,
+    vector <df::block_square_event_designation_priorityst *> *designation_priorities)
 {
     if (veins)
         veins->clear();
@@ -406,6 +407,8 @@ bool Maps::SortBlockEvents(df::map_block *block,
         spoors->clear();
     if (items)
         items->clear();
+    if (designation_priorities)
+        designation_priorities->clear();
 
     if (!block)
         return false;
@@ -443,6 +446,10 @@ bool Maps::SortBlockEvents(df::map_block *block,
         case block_square_event_type::item_spatter:
             if (items)
                 items->push_back((df::block_square_event_item_spatterst *)evt);
+            break;
+        case block_square_event_type::designation_priority:
+            if (designation_priorities)
+                designation_priorities->push_back((df::block_square_event_designation_priorityst *)evt);
             break;
         }
     }
@@ -593,7 +600,7 @@ bool Maps::canStepBetween(df::coord pos1, df::coord pos2)
     if ( !index_tile<uint16_t>(block1->walkable,pos1) || !index_tile<uint16_t>(block2->walkable,pos2) ) {
         return false;
     }
-    
+
     if ( block1->designation[pos1.x&0xF][pos1.y&0xF].bits.flow_size >= 4 ||
          block2->designation[pos2.x&0xF][pos2.y&0xF].bits.flow_size >= 4 )
         return false;
@@ -640,7 +647,7 @@ bool Maps::canStepBetween(df::coord pos1, df::coord pos2)
             }
             if ( !foundWall )
                 return false; //unusable ramp
-            
+
             //there has to be an unforbidden hatch above the ramp
             if ( index_tile<df::tile_occupancy>(block2->occupancy,pos2).bits.building != tile_building_occ::Dynamic )
                 return false;
@@ -657,7 +664,7 @@ bool Maps::canStepBetween(df::coord pos1, df::coord pos2)
         }
         return false;
     }
-    
+
     //diagonal up: has to be a ramp
     if ( shape1 == tiletype_shape::RAMP /*&& shape2 == tiletype_shape::RAMP*/ ) {
         df::coord up = df::coord(pos1.x,pos1.y,pos1.z+1);
@@ -681,11 +688,11 @@ bool Maps::canStepBetween(df::coord pos1, df::coord pos2)
         df::tiletype_shape shapeUp = ENUM_ATTR(tiletype,shape,*typeUp);
         if ( shapeUp != tiletype_shape::RAMP_TOP )
             return false;
-        
+
         df::map_block* blockUp = getTileBlock(up);
         if ( !blockUp )
             return false;
-        
+
         df::tile_building_occ occupancy = index_tile<df::tile_occupancy>(blockUp->occupancy,up).bits.building;
         if ( occupancy == tile_building_occ::Obstacle || occupancy == tile_building_occ::Floored || occupancy == tile_building_occ::Impassable )
             return false;

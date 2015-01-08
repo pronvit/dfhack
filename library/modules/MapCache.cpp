@@ -218,6 +218,14 @@ void MapExtras::Block::TileInfo::init_coninfo()
     memset(con_info->mat_index, -1, sizeof(con_info->mat_index));
 }
 
+void MapExtras::Block::TileInfo::init_priorityinfo()
+{
+    if (priority_info)
+        return;
+    priority_info = new PriorityInfo();
+    memset(priority_info, 0, sizeof(priority_info));
+}
+
 MapExtras::Block::BasematInfo::BasematInfo()
 {
     vein_dirty.clear();
