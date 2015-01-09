@@ -90,10 +90,6 @@ SOFTWARE.
 #define LFS_VERSION "1.6.2"
 #define LFS_LIBNAME "lfs"
 
-#if LUA_VERSION_NUM < 502
-#  define luaL_newlib(L,l) (lua_newtable(L), luaL_register(L,NULL,l))
-#endif
-
 /* Define 'strerror' for systems that do not implement it */
 #ifdef NO_STRERROR
 #define strerror(_)     "System unable to describe the error"
