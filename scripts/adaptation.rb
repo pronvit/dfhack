@@ -2,7 +2,7 @@
 # based on removebadthoughts.rb
 
 # Color constants, values mapped to color_value enum in include/ColorText.h
-COLOR_GREEN  = 2
+COLOR_GREEN  = 2        
 COLOR_RED    = 4
 COLOR_YELLOW = 14
 COLOR_WHITE  = 15
