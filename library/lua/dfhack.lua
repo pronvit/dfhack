@@ -283,7 +283,7 @@ end
 
 local print_banner = true
 
-function dfhack.interpreter(prompt,hfile,env)
+function dfhack.interpreter(prompt,hfile,env,prompt_env)
     if not dfhack.is_interactive() then
         return nil, 'not interactive'
     end
@@ -302,7 +302,7 @@ function dfhack.interpreter(prompt,hfile,env)
 
     local prompt_str = "["..(prompt or 'lua').."]# "
     local prompt_cont = string.rep(' ',#prompt_str-4)..">>> "
-    local prompt_env = {}
+    local prompt_env = prompt_env or {}
     local cmdlinelist = {}
     local t_prompt = nil
     local vcnt = 1
@@ -373,7 +373,7 @@ function dfhack.interpreter(prompt,hfile,env)
         end
     end
 
-    return true
+    return true, prompt_env
 end
 
 -- Command scripts

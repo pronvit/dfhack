@@ -1,7 +1,24 @@
 -- Execute lua commands interactively or from files.
 
+local HELP = [[Lua interpreter
+lua:
+    Interactive lua interpreter
+lua STATEMENT
+:lua STATEMENT
+    Execute a Lua statement. ":lua" is recommended if the statement contains spaces.
+lua -f|--file FILENAME
+    Run the script indicated by FILENAME
+lua -s|--save FILENAME
+    Run the script indicated by FILENAME in the current save folder
+lua -r|--reset|--reset-env
+    Reset the environment used by the interactive interpreter
+lua -h|-?|--help
+    Display this help
+]]
+
 local args={...}
 local cmd = args[1]
+prompt_env = prompt_env or {}
 
 if cmd=="--file" or cmd=="-f" then
     local f,err=loadfile (args[2])
@@ -20,7 +37,14 @@ elseif cmd=="--save" or cmd=="-s" then
         qerror(err)
     end
     dfhack.safecall(f,table.unpack(args,3))
+elseif cmd=="--reset-env" or cmd=="--reset" or cmd=="-r" then
+    prompt_env = {}
+elseif cmd=="--help" or cmd:match('-?[h?]$') then
+    print(HELP)
+elseif cmd:sub(1,1) == "-" then
+    dfhack.printerr('Unrecognized command: ' .. cmd .. '\nRun "lua -h" for help.')
 elseif cmd~=nil then
+    cmd = table.concat(args, ' ')
     -- Support some of the prefixes allowed by dfhack.interpreter
     local prefix
     if string.match(cmd, "^[~@!]") then
@@ -44,5 +68,5 @@ elseif cmd~=nil then
         end
     end
 else
-    dfhack.interpreter("lua","lua.history")
+    dfhack.interpreter("lua", "lua.history", nil, prompt_env)
 end
