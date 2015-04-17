@@ -131,6 +131,7 @@ function reload(module)
     end
     dofile(path)
 end
+dfhack.reload = reload
 
 -- Trivial classes
 
