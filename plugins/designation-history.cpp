@@ -100,9 +100,33 @@ bool lua_call_int_params (const char *func, std::vector<int> &params)
 
 struct designation_menu_hook : df::viewscreen_dwarfmodest {
     typedef df::viewscreen_dwarfmodest interpose_base;
-    inline bool valid_mode()
+    bool valid_mode()
     {
-        return ui->main.mode == ui_sidebar_mode::DesignateMine;
+        using namespace df::enums::ui_sidebar_mode;
+        switch (ui->main.mode)
+        {
+        case DesignateMine:
+        case DesignateRemoveRamps:
+        case DesignateUpStair:
+        case DesignateDownStair:
+        case DesignateUpDownStair:
+        case DesignateUpRamp:
+        case DesignateChannel:
+        case DesignateRemoveDesignation:
+        case DesignateSmooth:
+        case DesignateCarveTrack:
+        case DesignateEngrave:
+        case DesignateCarveFortification:
+        case DesignateToggleEngravings:
+        case DesignateToggleMarker:
+        case DesignateTrafficHigh:
+        case DesignateTrafficNormal:
+        case DesignateTrafficLow:
+        case DesignateTrafficRestricted:
+        case DesignateRemoveConstruction:
+            return true;
+        }
+        return false;
     }
     bool area_selection_mode()
     {
