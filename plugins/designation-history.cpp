@@ -3,11 +3,14 @@
 #include "DataDefs.h"
 #include "Export.h"
 #include "LuaTools.h"
+#include "LuaWrapper.h"
 #include "PluginManager.h"
 #include "modules/Filesystem.h"
 #include "modules/Gui.h"
+#include "modules/Maps.h"
 
 #include "uicommon.h"
+#include "df/block_square_event_designation_priorityst.h"
 #include "df/viewscreen_dwarfmodest.h"
 
 using namespace DFHack;
@@ -20,6 +23,148 @@ REQUIRE_GLOBAL(selection_rect);
 REQUIRE_GLOBAL(ui);
 
 DFhackCExport command_result plugin_enable (color_ostream &out, bool state);
+
+class Tile {
+private:
+    int x, y, z;
+    uint8_t bx : 4;
+    uint8_t by : 4;
+    df::map_block *map_block;
+    df::tile_dig_designation dig : 3;
+    uint32_t smooth : 1;
+    df::tile_traffic traffic : 2;
+    int32_t priority;
+    bool carve_track_north : 1;
+    bool carve_track_south : 1;
+    bool carve_track_east : 1;
+    bool carve_track_west : 1;
+    bool dig_marked : 1;
+    bool dig_auto : 1;
+    df::block_square_event_designation_priorityst *get_priority_event()
+    {
+        if (valid())
+        {
+            for (size_t i = 0; i < map_block->block_events.size(); ++i)
+            {
+                df::block_square_event *evt = map_block->block_events[i];
+                if (evt->getType() == block_square_event_type::designation_priority)
+                {
+                    return (df::block_square_event_designation_priorityst*)evt;
+                }
+            }
+        }
+        return NULL;
+    }
+public:
+    Tile (int x, int y, int z)
+    {
+        this->x = x; this->y = y; this->z = z;
+        bx = x % 16; by = y % 16;
+        map_block = Maps::getTileBlock(x, y, z);
+        if (!map_block)
+            return;
+        df::tile_designation &des = map_block->designation[bx][by];
+        df::tile_occupancy &occ = map_block->occupancy[bx][by];
+        dig = des.bits.dig;
+        smooth = des.bits.smooth;
+        traffic = des.bits.traffic;
+        auto evt = get_priority_event();
+        priority = (evt) ? evt->priority[bx][by] : 0;
+        carve_track_north = occ.bits.carve_track_north;
+        carve_track_south = occ.bits.carve_track_south;
+        carve_track_east = occ.bits.carve_track_east;
+        carve_track_west = occ.bits.carve_track_west;
+        dig_marked = occ.bits.dig_marked;
+        dig_auto = occ.bits.dig_auto;
+    }
+    inline bool valid() { return map_block; }
+    void write()
+    {
+        df::tile_designation &des = map_block->designation[bx][by];
+        df::tile_occupancy &occ = map_block->occupancy[bx][by];
+        des.bits.dig = dig;
+        des.bits.smooth = smooth;
+        des.bits.traffic = traffic;
+        auto evt = get_priority_event();
+        if (evt)
+            evt->priority[bx][by] = priority;
+        occ.bits.carve_track_north = carve_track_north;
+        occ.bits.carve_track_south = carve_track_south;
+        occ.bits.carve_track_east = carve_track_east;
+        occ.bits.carve_track_west = carve_track_west;
+        occ.bits.dig_marked = dig_marked;
+        occ.bits.dig_auto = dig_auto;
+    }
+};
+
+class Designation {
+private:
+    int x1, y1, z1, x2, y2, z2, dimx, dimy, dimz;
+    Tile *tiles;
+public:
+    Designation (int x1, int y1, int z1, int x2, int y2, int z2)
+    {
+        if (x1 > x2)
+            std::swap(x1, x2);
+        if (y1 > y2)
+            std::swap(y1, y2);
+        if (z1 > z2)
+            std::swap(z1, z2);
+        this->x1 = x1;
+        this->y1 = y1;
+        this->z1 = z1;
+        this->x2 = x2;
+        this->y2 = y2;
+        this->z2 = z2;
+        dimx = x2 - x1 + 1;
+        dimy = y2 - y1 + 1;
+        dimz = z2 - z1 + 1;
+        tiles = (Tile*)calloc(2 * dimx * dimy * dimz, sizeof(Tile));
+    }
+
+    ~Designation() {
+        free(tiles);
+    }
+
+    void save_stage (int stage)
+    {
+        for (int x = x1; x <= x2; x++)
+        {
+            for (int y = y1; y <= y2; y++)
+            {
+                for (int z = z1; z <= z2; z++)
+                {
+                    new (tiles + tile_index(stage, x - x1, y - y1, z - z1)) Tile(x, y, z);
+                }
+            }
+        }
+    }
+
+    void reset_stage (int stage)
+    {
+        for (int x = x1; x <= x2; x++)
+        {
+            for (int y = y1; y <= y2; y++)
+            {
+                for (int z = z1; z <= z2; z++)
+                {
+                    tiles[tile_index(stage, x - x1, y - y1, z - z1)].write();
+                }
+            }
+        }
+    }
+
+    inline int tile_index (int stage, int x, int y, int z)
+    {
+        if (x < 0 || x >= dimx || y < 0 || y >= dimy || z < 0 || z >= dimz || stage < 0 || stage > 1) {
+            return -1;
+        }
+        return (stage * dimx * dimy * dimz) + (x * dimy * dimz) + (y * dimz) + z;
+    }
+};
+
+static std::vector<Designation*> d_history;
+static size_t d_history_idx;
 
 static int64_t lua_last_mtime = -1;
 const char *lua_filename = "hack/lua/plugins/designation-history.lua";
@@ -156,26 +301,32 @@ struct designation_menu_hook : df::viewscreen_dwarfmodest {
         if (valid_mode())
         {
             if (input->count(interface_key::CUSTOM_ALT_U))
-                lua_call_basic("undo");
+            {
+                if (d_history_idx < d_history.size())
+                {
+                    d_history[d_history_idx]->reset_stage(0);
+                    d_history_idx--;
+                }
+            }
             else if (input->count(interface_key::CUSTOM_ALT_H))
                 lua_call_basic("history");
+            else if (area_selection_mode() && input->count(interface_key::SELECT))
+            {
+                Designation* cur = new Designation(selection_rect->start_x,
+                    selection_rect->start_y,
+                    selection_rect->start_z,
+                    cursor->x,
+                    cursor->y,
+                    cursor->z);
+                cur->save_stage(0);
+                INTERPOSE_NEXT(feed)(input);
+                cur->save_stage(1);
+                d_history.push_back(cur);
+                d_history_idx = d_history.size() - 1;
+            }
             else
             {
-                bool in_select = area_selection_mode() && input->count(interface_key::SELECT);
-                std::vector<int> params;
-                if (in_select)
-                {
-                    params.push_back(selection_rect->start_x);
-                    params.push_back(selection_rect->start_y);
-                    params.push_back(selection_rect->start_z);
-                    params.push_back(cursor->x);
-                    params.push_back(cursor->y);
-                    params.push_back(cursor->z);
-                    lua_call_int_params("before_select", params);
-                }
                 INTERPOSE_NEXT(feed)(input);
-                if (in_select)
-                    lua_call_int_params("after_select", params);
             }
         }
         else
@@ -195,6 +346,8 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
 
 DFhackCExport command_result plugin_shutdown (color_ostream &out)
 {
+    for (size_t i = 0; i < d_history.size(); i++)
+        delete d_history[i];
     if (is_enabled)
         return plugin_enable(out, false);
     return CR_OK;
