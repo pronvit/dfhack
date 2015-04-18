@@ -15,7 +15,8 @@ function undo()
 end
 
 function history()
-    print 'history'
+    print(('history: %d items'):format(#d_history))
+    printall(d_history)
 end
 
 function before_select(...)
@@ -51,9 +52,9 @@ end
 
 Tile = defclass(Tile)
 function Tile:init(args)
-    self.block = dfhack.maps.getTileBlock(args.x, args.y, args.z)
-    self.bx = args.x % 16
-    self.by = args.y % 16
+    self.block = dfhack.maps.getTileBlock(args[1], args[2], args[3])
+    self.bx = args[1] % 16
+    self.by = args[2] % 16
     local des = self.block.designation[self.bx][self.by]
     self.dig = des.dig
     self.smooth = des.smooth
@@ -72,7 +73,10 @@ function Tile:write()
     des.dig = self.dig
     des.smooth = self.smooth
     des.traffic = self.traffic
-    find_priority_event(self.block)[self.bx][self.by] = self.priority
+    local evt = find_priority_event(self.block)
+    if evt then
+        evt[self.bx][self.by] = self.priority
+    end
 end
 
 Designation = defclass(Designation)
@@ -82,26 +86,23 @@ end
 
 function Designation:set(stage, coords)
     if stage ~= 1 and stage ~= 2 then error('Invalid stage: ' .. stage) end
-    local x1 = coords[1]
-    local x2 = coords[4]
-    local y1 = coords[2]
-    local y2 = coords[5]
-    local z1 = coords[3]
-    local z2 = coords[6]
-    self.minx = math.min(x1, x2)
-    self.maxx = math.max(x1, x2)
-    self.miny = math.min(y1, y2)
-    self.maxy = math.max(y1, y2)
-    self.minz = math.min(z1, z2)
-    self.maxz = math.max(z1, z2)
+    self.x1 = math.min(coords[1], coords[4])
+    self.x2 = math.max(coords[1], coords[4])
+    self.y1 = math.min(coords[2], coords[5])
+    self.y2 = math.max(coords[2], coords[5])
+    self.z1 = math.min(coords[3], coords[6])
+    self.z2 = math.max(coords[3], coords[6])
+    self.dimx = self.x2 - self.x1 + 1
+    self.dimy = self.y2 - self.y1 + 1
+    self.dimz = self.z2 - self.z1 + 1
     local s = {}
     self.stages[stage] = s
-    for x = self.minx, self.maxx do
-        s[x] = {}
-        for y = self.miny, self.maxy do
-            s[x][y] = {}
-            for z = self.minz, self.maxz do
-                s[x][y][z] = Tile{x=x, y=y, z=z}
+    local dimy = self.dimy
+    local dimz = self.dimz
+    for x = self.x1, self.x2 do
+        for y = self.y1, self.y2 do
+            for z = self.z1, self.z2 do
+                s[x * dimy * dimz + y * dimz + z] = Tile{x, y, z}
             end
         end
     end
@@ -116,10 +117,13 @@ function Designation:redo()
 end
 
 function Designation:reset_stage(stage)
-    for x = self.minx, self.maxx do
-        for y = self.miny, self.maxy do
-            for z = self.minz, self.maxz do
-                self.stages[stage][x][y][z]:write()
+    local s = self.stages[stage]
+    local dimy = self.dimy
+    local dimz = self.dimz
+    for x = self.x1, self.x2 do
+        for y = self.y1, self.y2 do
+            for z = self.z1, self.z2 do
+                s[x * dimy * dimz + y * dimz + z]:write()
             end
         end
     end

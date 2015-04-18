@@ -195,7 +195,6 @@ DFhackCExport command_result plugin_init (color_ostream &out, std::vector <Plugi
 
 DFhackCExport command_result plugin_shutdown (color_ostream &out)
 {
-    out.print("plugin_shutdown\n");
     if (is_enabled)
         return plugin_enable(out, false);
     return CR_OK;
