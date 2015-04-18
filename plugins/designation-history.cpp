@@ -11,6 +11,7 @@
 
 #include "uicommon.h"
 #include "df/block_square_event_designation_priorityst.h"
+#include "df/ui_sidebar_menus.h"
 #include "df/viewscreen_dwarfmodest.h"
 
 using namespace DFHack;
@@ -21,6 +22,7 @@ DFHACK_PLUGIN_IS_ENABLED(is_enabled);
 REQUIRE_GLOBAL(cursor);
 REQUIRE_GLOBAL(selection_rect);
 REQUIRE_GLOBAL(ui);
+REQUIRE_GLOBAL(ui_sidebar_menus);
 
 DFhackCExport command_result plugin_enable (color_ostream &out, bool state);
 
@@ -328,6 +330,7 @@ struct designation_menu_hook : df::viewscreen_dwarfmodest {
             {
                 INTERPOSE_NEXT(feed)(input);
             }
+            ui_sidebar_menus->minimap.need_render = true;
         }
         else
         {
