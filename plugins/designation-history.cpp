@@ -100,10 +100,9 @@ public:
 };
 
 class Designation {
-private:
+public:
     int x1, y1, z1, x2, y2, z2, dimx, dimy, dimz;
     Tile *tiles;
-public:
     Designation (int x1, int y1, int z1, int x2, int y2, int z2)
     {
         if (x1 > x2)
@@ -244,6 +243,49 @@ bool lua_call_int_params (const char *func, std::vector<int> &params)
         lua_pushinteger(L, params[i]);
     return lua_safe_call(params.size());
 }
+
+namespace DHLuaApi {
+    template <typename T_key, typename T_value>
+    void table_set (lua_State *L, T_key key, T_value value)
+    {
+        Lua::Push(L, key);
+        Lua::Push(L, value);
+        lua_settable(L, -3);
+    }
+    int get_history (lua_State *L)
+    {
+        lua_newtable(L);
+        for (size_t i = 0; i < d_history.size(); i++)
+        {
+            Designation *d = d_history[i];
+            lua_pushinteger(L, i + 1);
+            lua_newtable(L);
+            #define set_field(name) table_set(L, #name, d->name)
+            set_field(x1);
+            set_field(x2);
+            set_field(dimx);
+            set_field(y1);
+            set_field(y2);
+            set_field(dimy);
+            set_field(z1);
+            set_field(z2);
+            set_field(dimz);
+            #undef set_field
+            table_set(L, "centerx", (d->x1 + d->x2) / 2);
+            table_set(L, "centery", (d->y1 + d->y2) / 2);
+            table_set(L, "centerz", (d->z1 + d->z2) / 2);
+            lua_settable(L, -3);
+        }
+        return 1;
+    }
+}
+
+#define DH_LUA_FUNC(name) { #name, df::wrap_function(DHLuaApi::name,true) }
+#define DH_LUA_CMD(name) { #name, DHLuaApi::name }
+DFHACK_PLUGIN_LUA_COMMANDS {
+    DH_LUA_CMD(get_history),
+    DFHACK_LUA_END
+};
 
 struct designation_menu_hook : df::viewscreen_dwarfmodest {
     typedef df::viewscreen_dwarfmodest interpose_base;
