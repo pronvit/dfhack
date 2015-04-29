@@ -52,6 +52,7 @@ using namespace std;
 #include "modules/Windows.h"
 #include "RemoteServer.h"
 #include "LuaTools.h"
+#include "PythonLib.h"
 #include "DFHackVersion.h"
 
 #include "MiscUtils.h"
@@ -1240,6 +1241,7 @@ bool Core::Init()
 
     // initialize common lua context
     Lua::Core::Init(con);
+    Python::Init();
 
     // create mutex for syncing with interactive tasks
     misc_data_mutex=new mutex();
@@ -1694,6 +1696,7 @@ int Core::Shutdown ( void )
     }
     allModules.clear();
     memset(&(s_mods), 0, sizeof(s_mods));
+    Python::Shutdown();
     con.shutdown();
     return -1;
 }

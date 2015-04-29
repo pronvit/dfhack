@@ -45,6 +45,8 @@ include/VersionInfoFactory.h
 include/RemoteClient.h
 include/RemoteServer.h
 include/RemoteTools.h
+include/PythonLib.h
+include/PythonLibStubs.h
 )
 
 SET(MAIN_HEADERS_WINDOWS
@@ -71,6 +73,7 @@ VersionInfoFactory.cpp
 RemoteClient.cpp
 RemoteServer.cpp
 RemoteTools.cpp
+PythonLib.cpp
 )
 
 SET(MAIN_SOURCES_WINDOWS
@@ -360,6 +363,10 @@ install(TARGETS dfhack-run dfhack-client binpatch
 install(DIRECTORY lua/
         DESTINATION ${DFHACK_LUA_DESTINATION}
         FILES_MATCHING PATTERN "*.lua")
+
+install(DIRECTORY python/
+        DESTINATION ${DFHACK_PYTHON_DESTINATION}
+        FILES_MATCHING PATTERN "*.py")
 
 install(DIRECTORY ${dfhack_SOURCE_DIR}/scripts
         DESTINATION ${DFHACK_DATA_DESTINATION}
