@@ -45,6 +45,8 @@ include/VersionInfoFactory.h
 include/RemoteClient.h
 include/RemoteServer.h
 include/RemoteTools.h
+include/SDLWrapper.h
+include/SDLWrapperStubs.h
 )
 
 SET(MAIN_HEADERS_WINDOWS
@@ -71,6 +73,7 @@ VersionInfoFactory.cpp
 RemoteClient.cpp
 RemoteServer.cpp
 RemoteTools.cpp
+SDLWrapper.cpp
 )
 
 SET(MAIN_SOURCES_WINDOWS

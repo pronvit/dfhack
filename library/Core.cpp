@@ -75,6 +75,7 @@ using namespace DFHack;
 #include "tinythread.h"
 
 #include "SDL_events.h"
+#include "SDLWrapper.h"
 
 using namespace tthread;
 using namespace df::enums;
@@ -1170,6 +1171,7 @@ bool Core::Init()
     if(errorstate)
         return false;
 
+    SDLWrapper::init();
     // find out what we are...
     #ifdef LINUX_BUILD
         const char * path = "hack/symbols.xml";
