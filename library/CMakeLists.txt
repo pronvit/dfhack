@@ -65,6 +65,7 @@ LuaWrapper.cpp
 LuaTypes.cpp
 LuaTools.cpp
 LuaApi.cpp
+luai-helpers.cpp
 DataStatics.cpp
 DataStaticsCtor.cpp
 DataStaticsFields.cpp
@@ -281,6 +282,15 @@ ADD_EXECUTABLE(dfhack-run dfhack-run.cpp)
 ADD_EXECUTABLE(binpatch binpatch.cpp)
 TARGET_LINK_LIBRARIES(binpatch dfhack-md5)
 
+SET(LUAI_SRCS luai.cpp modules/Filesystem.cpp)
+IF(WIN32)
+    LIST(APPEND LUAI_SRCS PlugLoad-windows.cpp)
+ELSE()
+    LIST(APPEND LUAI_SRCS PlugLoad-posix.cpp)
+ENDIF()
+ADD_EXECUTABLE(luai ${LUAI_SRCS})
+TARGET_LINK_LIBRARIES(luai lua_static)
+
 IF(BUILD_EGGY)
     SET_TARGET_PROPERTIES(dfhack PROPERTIES OUTPUT_NAME "egg" )
 else()
@@ -369,7 +379,7 @@ install(FILES xml/symbols.xml
 install(FILES ../dfhack.init-example
         DESTINATION ${DFHACK_BINARY_DESTINATION})
 
-install(TARGETS dfhack-run dfhack-client binpatch
+install(TARGETS dfhack-run dfhack-client binpatch luai
         LIBRARY DESTINATION ${DFHACK_LIBRARY_DESTINATION}
         RUNTIME DESTINATION ${DFHACK_LIBRARY_DESTINATION})
 
