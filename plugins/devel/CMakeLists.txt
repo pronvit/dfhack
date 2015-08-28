@@ -21,6 +21,8 @@ DFHACK_PLUGIN(stripcaged stripcaged.cpp)
 DFHACK_PLUGIN(tilesieve tilesieve.cpp)
 DFHACK_PLUGIN(zoom zoom.cpp)
 
+DFHACK_PLUGIN(renderer-msg renderer-msg.cpp)
+
 IF(UNIX)
 DFHACK_PLUGIN(ref-index ref-index.cpp)
 ENDIF()
