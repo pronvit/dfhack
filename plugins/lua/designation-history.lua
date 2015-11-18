@@ -23,6 +23,16 @@ function scroll_index(index, delta, min, max, opts)
     return index
 end
 
+function page_number(cursor, page_height)
+    local page
+    if cursor <= page_height then
+        page = 1
+    else
+        page = math.floor((cursor -1) / page_height) + 1
+    end
+    return page
+end
+
 HistScreen = defclass(HistScreen, guidm.MenuOverlay)
 
 function HistScreen:init(opts)
@@ -32,10 +42,20 @@ function HistScreen:init(opts)
     for i, v in pairs(opts.history) do
         self.history[#opts.history - i + 1] = v
     end
+    local _, cols = dfhack.screen.getWindowSize()
     self.start = 1
+    self.page = 1
     self.cursor = 1
-    self.page_height = 21
+    self.page_height = math.max(cols - 10, 20)
     self.start_max = #self.history - self.page_height + 1
+end
+
+function HistScreen:page_start()
+    return self.page * self.page_height - self.page_height + 1
+end
+
+function HistScreen:page_end()
+    return math.min(self.page * self.page_height, #self.history)
 end
 
 function HistScreen:render(_p)
@@ -50,12 +70,13 @@ function HistScreen:render(_p)
         p:string('History empty', {fg = COLOR_LIGHTRED})
         return
     end
-    for i = self.start, math.min(self.start + self.page_height - 1, #self.history) do
+    for i = self:page_start(), self:page_end() do
         local hitem = self.history[i]
-        p:string(('(%ix%ix%i) %s'):format(hitem.dimx, hitem.dimy, hitem.dimz, hitem.desc),
+        p:string(('%2i: (%2ix%2ix%i) %s'):format(i, hitem.dimx, hitem.dimy, hitem.dimz, hitem.desc),
             {fg = i == self.cursor and COLOR_WHITE or COLOR_GREY})
         p:newline()
     end
+    p:string('  Page ' .. self.page .. ' of ' .. math.floor(#self.history / self.page_height + 1), {fg = COLOR_GREEN})
     p:seek(0, p.y2 - 3)
     p:key('CUSTOM_U'):string(': Undo, ')
     p:key('CUSTOM_R'):string(': Redo, ')
@@ -77,11 +98,12 @@ function HistScreen:onInput(keys)
         self.cursor = scroll_index(
             self.cursor,
             ((keys.SECONDSCROLL_DOWN or keys.SECONDSCROLL_PAGEDOWN) and 1 or -1) *
-                ((keys.SECONDSCROLL_PAGEUP or keys.SECONDSCROLL_PAGEDOWN) and 10 or 1),
+                ((keys.SECONDSCROLL_PAGEUP or keys.SECONDSCROLL_PAGEDOWN) and self.page_height or 1),
             1,
             #self.history,
             {wrap = true}
         )
+        self.page = page_number(self.cursor, self.page_height)
     elseif keys.CUSTOM_U or keys.CUSTOM_R then
         reset_stage(hitem.id, keys.CUSTOM_U and 0 or 1)
     elseif keys.CUSTOM_Z then
