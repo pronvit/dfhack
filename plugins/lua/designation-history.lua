@@ -61,21 +61,23 @@ function HistScreen:render(_p)
     self.super.render(self, _p)
     local p = gui.Painter.new_wh(
         self.df_layout.menu.x1 + 1,
-        self.df_layout.menu.y1 + 1,
+        self.df_layout.menu.y1,
         self.df_layout.menu.width - 2,
-        self.df_layout.menu.height - 2
+        self.df_layout.menu.height - 1
     )
+    p:pen(COLOR_WHITE)
+    p:key_pen(COLOR_LIGHTRED)
     if #self.history == 0 then
         p:string('History empty', {fg = COLOR_LIGHTRED})
         return
     end
+    p:string('Page ' .. self.page .. ' of ' .. math.floor(#self.history / self.page_height + 1), {fg = COLOR_GREEN}):newline()
     for i = self:page_start(), self:page_end() do
         local hitem = self.history[i]
-        p:string(('%2i: (%2ix%2ix%i) %s'):format(i, hitem.dimx, hitem.dimy, hitem.dimz, hitem.desc),
+        p:string(('%2i: (%ix%ix%i) %s'):format(i, hitem.dimx, hitem.dimy, hitem.dimz, hitem.desc),
             {fg = i == self.cursor and COLOR_WHITE or COLOR_GREY})
         p:newline()
     end
-    p:string('  Page ' .. self.page .. ' of ' .. math.floor(#self.history / self.page_height + 1), {fg = COLOR_GREEN})
     p:seek(0, p.y2 - 3)
     p:key('CUSTOM_U'):string(': Undo, ')
     p:key('CUSTOM_R'):string(': Redo, ')
