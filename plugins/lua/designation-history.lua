@@ -42,12 +42,11 @@ function HistScreen:init(opts)
     for i, v in pairs(opts.history) do
         self.history[#opts.history - i + 1] = v
     end
+    self.min_page_size = 18 -- max rows that can be shown at 25 row resolution
     local _, cols = dfhack.screen.getWindowSize()
-    self.start = 1
+    self.page_height = math.max(cols - 8, self.min_page_size)
     self.page = 1
     self.cursor = 1
-    self.page_height = math.max(cols - 10, 20)
-    self.start_max = #self.history - self.page_height + 1
 end
 
 function HistScreen:page_start()
