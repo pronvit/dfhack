@@ -199,7 +199,7 @@ public:
 };
 
 static std::vector<Designation*> d_history;
-static size_t d_history_idx;
+static int d_history_idx;
 
 static int64_t lua_last_mtime = -1;
 const char *lua_filename = "hack/lua/plugins/designation-history.lua";
@@ -375,6 +375,14 @@ struct designation_menu_hook : df::viewscreen_dwarfmodest {
         }
         return false;
     }
+    inline bool can_undo()
+    {
+        return !d_history.empty() && d_history_idx >= 0 && d_history_idx < d_history.size();
+    }
+    inline bool can_redo()
+    {
+        return !d_history.empty() && d_history_idx + 1 < d_history.size();
+    }
     DEFINE_VMETHOD_INTERPOSE(void, render, ())
     {
         INTERPOSE_NEXT(render)();
@@ -383,10 +391,12 @@ struct designation_menu_hook : df::viewscreen_dwarfmodest {
             auto dims = Gui::getDwarfmodeViewDims();
             int x = dims.menu_x1 + 1;
             int y = 1;
-            OutputString(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(interface_key::CUSTOM_ALT_U));
-            OutputString(COLOR_GREY, x, y, ": Undo, ");
-            OutputString(COLOR_LIGHTRED, x, y, Screen::getKeyDisplay(interface_key::CUSTOM_ALT_H));
-            OutputString(COLOR_GREY, x, y, ": History");
+            OutputString(COLOR_LIGHTRED, x, y, "Alt+U");
+            OutputString(can_undo() ? COLOR_WHITE : COLOR_GREY, x, y, "ndo, ");
+            OutputString(COLOR_LIGHTRED, x, y, "R");
+            OutputString(can_redo() ? COLOR_WHITE : COLOR_GREY, x, y, "edo, ");
+            OutputString(COLOR_LIGHTRED, x, y, "H");
+            OutputString(COLOR_WHITE, x, y, "istory");
         }
     }
     DEFINE_VMETHOD_INTERPOSE(void, feed, (std::set<df::interface_key> *input))
@@ -395,10 +405,20 @@ struct designation_menu_hook : df::viewscreen_dwarfmodest {
         {
             if (input->count(interface_key::CUSTOM_ALT_U))
             {
-                if (d_history_idx < d_history.size())
+                if (can_undo())
                 {
                     d_history[d_history_idx]->reset_stage(0);
-                    d_history_idx--;
+                    --d_history_idx;
+                }
+            }
+            else if (input->count(interface_key::CUSTOM_ALT_R))
+            {
+                if (can_redo())
+                {
+                    ++d_history_idx;
+                    if (d_history_idx < 0)
+                        d_history_idx = 0;
+                    d_history[d_history_idx]->reset_stage(1);
                 }
             }
             else if (input->count(interface_key::CUSTOM_ALT_H))
