@@ -1,3 +1,5 @@
+#include <map>
+
 #include "Console.h"
 #include "Core.h"
 #include "DataDefs.h"
@@ -25,6 +27,35 @@ REQUIRE_GLOBAL(ui);
 REQUIRE_GLOBAL(ui_sidebar_menus);
 
 DFhackCExport command_result plugin_enable (color_ostream &out, bool state);
+
+const char *describe_sidebar_mode (df::ui_sidebar_mode mode, const char *def = "Unknown")
+{
+    using namespace df::enums::ui_sidebar_mode;
+    static std::map<df::ui_sidebar_mode, const char*> descs;
+    if (descs.empty())
+    {
+        descs[DesignateMine]               = "Mine";
+        descs[DesignateRemoveRamps]        = "Remove Up Stairs/Ramps";
+        descs[DesignateUpStair]            = "Up Stair";
+        descs[DesignateDownStair]          = "Down Stair";
+        descs[DesignateUpDownStair]        = "Up/Down Stair";
+        descs[DesignateUpRamp]             = "Up Ramp";
+        descs[DesignateChannel]            = "Channel";
+        descs[DesignateRemoveDesignation]  = "Remove Designation";
+        descs[DesignateSmooth]             = "Smooth Stone";
+        descs[DesignateCarveTrack]         = "Carve Track";
+        descs[DesignateEngrave]            = "Engrave Stone";
+        descs[DesignateCarveFortification] = "Carve Fortifications";
+        descs[DesignateToggleEngravings]   = "Toggle Engravings";
+        descs[DesignateToggleMarker]       = "Toggle Standard/Marking";
+        descs[DesignateTrafficHigh]        = "Traffic: High";
+        descs[DesignateTrafficNormal]      = "Traffic: Normal";
+        descs[DesignateTrafficLow]         = "Traffic: Low";
+        descs[DesignateTrafficRestricted]  = "Traffic: Restricted";
+        descs[DesignateRemoveConstruction] = "Remove Construction";
+    }
+    return descs[mode] ? descs[mode] : def;
+}
 
 class Tile {
 private:
@@ -102,8 +133,11 @@ public:
 class Designation {
 public:
     int x1, y1, z1, x2, y2, z2, dimx, dimy, dimz;
+    df::ui_sidebar_mode mode;
     Tile *tiles;
-    Designation (int x1, int y1, int z1, int x2, int y2, int z2)
+    Designation (int x1_, int y1_, int z1_, int x2_, int y2_, int z2_, df::ui_sidebar_mode mode)
+        :x1(x1_), y1(y1_), z1(z1_), x2(x2_), y2(y2_), z2(z2_),
+         mode(mode)
     {
         if (x1 > x2)
             std::swap(x1, x2);
@@ -111,19 +145,14 @@ public:
             std::swap(y1, y2);
         if (z1 > z2)
             std::swap(z1, z2);
-        this->x1 = x1;
-        this->y1 = y1;
-        this->z1 = z1;
-        this->x2 = x2;
-        this->y2 = y2;
-        this->z2 = z2;
         dimx = x2 - x1 + 1;
         dimy = y2 - y1 + 1;
         dimz = z2 - z1 + 1;
         tiles = (Tile*)calloc(2 * dimx * dimy * dimz, sizeof(Tile));
     }
 
-    ~Designation() {
+    ~Designation()
+    {
         free(tiles);
     }
 
@@ -162,6 +191,11 @@ public:
         }
         return (stage * dimx * dimy * dimz) + (x * dimy * dimz) + (y * dimz) + z;
     }
+
+    std::string describe()
+    {
+        return std::string(describe_sidebar_mode(mode));
+    }
 };
 
 static std::vector<Designation*> d_history;
@@ -173,7 +207,6 @@ const char *lua_filename = "hack/lua/plugins/designation-history.lua";
 bool reload_lua()
 {
     color_ostream &out = Core::getInstance().getConsole();
-    out.print("reload_lua");
     auto L = Lua::Core::State;
     Lua::StackUnwinder top(L);
     if (!lua_checkstack(L, 4))
@@ -270,13 +303,28 @@ namespace DHLuaApi {
             set_field(z1);
             set_field(z2);
             set_field(dimz);
+            set_field(mode);
             #undef set_field
             table_set(L, "centerx", (d->x1 + d->x2) / 2);
             table_set(L, "centery", (d->y1 + d->y2) / 2);
             table_set(L, "centerz", (d->z1 + d->z2) / 2);
+            table_set(L, "id", i);
+            table_set(L, "desc", d->describe().c_str());
             lua_settable(L, -3);
         }
         return 1;
+    }
+    int reset_stage (lua_State *L)
+    {
+        int idx = luaL_checkint(L, 1),
+            stage = luaL_checkint(L, 2);
+        if (stage != 0 && stage != 1)
+            luaL_error(L, "invalid designation stage: %d", stage);
+        if (idx < 0 || idx >= d_history.size())
+            luaL_error(L, "invalid history index: %d", idx);
+        Designation *d = d_history[idx];
+        d->reset_stage(stage);
+        return 0;
     }
 }
 
@@ -284,6 +332,7 @@ namespace DHLuaApi {
 #define DH_LUA_CMD(name) { #name, DHLuaApi::name }
 DFHACK_PLUGIN_LUA_COMMANDS {
     DH_LUA_CMD(get_history),
+    DH_LUA_CMD(reset_stage),
     DFHACK_LUA_END
 };
 
@@ -356,12 +405,15 @@ struct designation_menu_hook : df::viewscreen_dwarfmodest {
                 lua_call_basic("history");
             else if (area_selection_mode() && input->count(interface_key::SELECT))
             {
-                Designation* cur = new Designation(selection_rect->start_x,
+                Designation* cur = new Designation(
+                    selection_rect->start_x,
                     selection_rect->start_y,
                     selection_rect->start_z,
                     cursor->x,
                     cursor->y,
-                    cursor->z);
+                    cursor->z,
+                    ui->main.mode
+                );
                 cur->save_stage(0);
                 INTERPOSE_NEXT(feed)(input);
                 cur->save_stage(1);
