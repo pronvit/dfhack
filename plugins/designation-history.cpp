@@ -201,6 +201,20 @@ public:
 static std::vector<Designation*> d_history;
 static int d_history_idx;
 
+static int erase_history(int start_index, int end_index)
+{
+	int max_index = d_history.size() - 1;
+    if (start_index < 0 || start_index > max_index)
+        return 1;
+    if (end_index < 0 || end_index > max_index || end_index < start_index)
+        return 2;
+    d_history.erase(d_history.begin() + start_index, d_history.begin() + end_index + 1); // delete inclusively from start_index to end_index.
+    if (d_history_idx >= start_index || d_history_idx <= end_index ||
+            d_history_idx > d_history.size() - 1)
+        d_history_idx = d_history.size() - 1;
+    return 0;
+}
+
 static int64_t lua_last_mtime = -1;
 const char *lua_filename = "hack/lua/plugins/designation-history.lua";
 
@@ -326,6 +340,18 @@ namespace DHLuaApi {
         d->reset_stage(stage);
         return 0;
     }
+
+    int remove_history (lua_State *L)
+    {
+        int start_index = luaL_checkint(L, 1),
+            end_index = luaL_checkint(L, 2);
+        int ret = erase_history(start_index - 1, end_index - 1);
+        if (ret == 1)
+            luaL_error(L, "remove_history: invalid start_index: %d (end_index: %d)", start_index, end_index);
+        if (ret == 2)
+            luaL_error(L, "remove_history: invalid end_index: %d (start_index: %d)", end_index, start_index);
+        return 0;
+    }
 }
 
 #define DH_LUA_FUNC(name) { #name, df::wrap_function(DHLuaApi::name,true) }
@@ -333,6 +359,7 @@ namespace DHLuaApi {
 DFHACK_PLUGIN_LUA_COMMANDS {
     DH_LUA_CMD(get_history),
     DH_LUA_CMD(reset_stage),
+    DH_LUA_CMD(remove_history),
     DFHACK_LUA_END
 };
 

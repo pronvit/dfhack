@@ -3,10 +3,68 @@ local _ENV = mkmodule('plugins.designation-history')
 gui = require 'gui'
 guidm = require 'gui.dwarfmode'
 
-function scroll_index(index, delta, min, max, opts)
+--
+-- Create classes
+--
+
+HistScreen = defclass(HistScreen, guidm.MenuOverlay)
+HistRows = defclass(HistRows)
+
+--
+-- HistRows
+--
+
+function HistRows:read_history()
+    -- reverse - list newest first
+    local hist = get_history()
+    self.history = {}
+    for i, v in pairs(hist) do
+        self.history[#hist - i + 1] = v
+        self.history[#hist - i + 1].orig_id = i -- save the C++ ID for per-row delete
+    end
+end
+
+function HistRows:init(screen_rows)
+    self:read_history()
+    local min_page_size = 15 -- max rows that can be shown at 25 row resolution
+    self.page_height = math.max(screen_rows - 11, min_page_size)
+    self.page = 1
+    self.cursor = 1
+end
+
+function HistRows:max_page()
+    return math.floor(#self.history / self.page_height + 1)
+end
+
+function HistRows:paginate()
+    if self.cursor <= self.page_height then
+        self.page = 1
+    else
+        self.page = math.floor((self.cursor -1) / self.page_height) + 1
+    end
+end
+
+function HistRows:has_rows()
+    return #self.history > 0
+end
+
+function HistRows:get_row(index)
+    if not index then index = self.cursor end
+    return self.history[index]
+end
+
+function HistRows:mark_row()
+    self.history[self.cursor].mark = self.history[self.cursor].mark == 1 and 0 or 1
+end
+
+function HistRows:update_scroll(delta, page_scroll, opts)
     if not opts then opts = {} end
     if opts.wrap == nil then opts.wrap = true end
-    index = index + delta
+    local min = 1
+    local max = #self.history
+    if page_scroll then delta = delta * self.page_height end
+    local index = self.cursor + delta
+
     if delta < 0 and index < min then
         if index <= min + delta and opts.wrap then
             index = max
@@ -20,102 +78,174 @@ function scroll_index(index, delta, min, max, opts)
             index = max
         end
     end
-    return index
+    self.cursor = index
+    self:paginate()
 end
 
-function page_number(cursor, page_height)
-    local page
-    if cursor <= page_height then
-        page = 1
+function HistRows:delete_row()
+    self:delete_rows(self.cursor)
+end
+
+function HistRows:has_marked_rows()
+    for i = 1, #self.history do
+        if self.history[i].mark == 1 then
+            return true
+        end
+    end
+    return false
+end
+
+function HistRows:delete_marked_rows()
+    for i = 1, #self.history do
+        if self.history[i].mark == 1 then
+            self:delete_rows(i, i, {reread=false})
+        end
+    end
+    self:read_history()
+end
+
+function HistRows:delete_history()
+    self:delete_rows(1, #self.history)
+end
+
+function HistRows:delete_rows(first, last, opts)
+    if not opts then opts = {reread=true} end
+    if not last then last = first end
+    -- re-reverse the IDs for a ranged delete
+    if first ~= last then first, last = last, first end
+    remove_history(self.history[first].orig_id, self.history[last].orig_id)
+    if opts.reread then self:read_history() end
+    if self.cursor > #self.history then self.cursor = #self.history end
+end
+
+function HistRows:print_rows(print_func)
+    local first = self.page * self.page_height - self.page_height + 1
+    local last = math.min(self.page * self.page_height, #self.history)
+    for i = first, last do
+        local selected = self.history[i].mark == 1 and true or false
+        local is_cursor = i == self.cursor and true or false
+        print_func(i, selected, is_cursor,
+        {self.history[i].dimx, self.history[i].dimy, self.history[i].dimz, self.history[i].desc})
+    end
+end
+
+function HistRows:stage_marked(stage)
+    for i = 1, #self.history do
+        if self.history[i].mark == 1 then
+            reset_stage(i - 1, stage)
+        end
+    end
+end
+
+--
+-- HistScreen
+--
+
+function HistScreen:onResize(screen_cols, screen_rows)
+    -- onResize is called when the MenuOverlay is first created as well as after each GUI resize
+    -- therefore, populate the rows here so row count is always in sync with window size.
+    self.super.onResize(self, screen_cols, screen_rows)
+    self.rows = HistRows(screen_rows)
+end
+
+function HistScreen:render_menu()
+    self.p:seek(0, self.p.y2 - 6)
+    self.p:key('SELECT'):string(': Mark, ')
+    if self.rows:has_marked_rows() then
+        self.p:key('CUSTOM_D'):string(': Delete marks'):newline()
     else
-        page = math.floor((cursor -1) / page_height) + 1
+        self.p:key('CUSTOM_D'):string(': Delete row'):newline()
     end
-    return page
-end
-
-HistScreen = defclass(HistScreen, guidm.MenuOverlay)
-
-function HistScreen:init(opts)
-    self.super.init(self)
-    -- reverse - list newest first
-    self.history = {}
-    for i, v in pairs(opts.history) do
-        self.history[#opts.history - i + 1] = v
+    self.p:key('CUSTOM_SHIFT_D'):string(': Delete all'):newline()
+    if self.rows:has_marked_rows() then
+        self.p:key('CUSTOM_SHIFT_U'):string(': Undo all marked'):newline()
+        self.p:key('CUSTOM_SHIFT_R'):string(': Redo all marked'):newline()
     end
-    self.min_page_size = 18 -- max rows that can be shown at 25 row resolution
-    local _, cols = dfhack.screen.getWindowSize()
-    self.page_height = math.max(cols - 8, self.min_page_size)
-    self.page = 1
-    self.cursor = 1
+    self.p:key('CUSTOM_U'):string(': Undo, ')
+    self.p:key('CUSTOM_R'):string(': Redo, ')
+    self.p:key('CUSTOM_Z'):string(': Zoom')
+    self.p:newline()
+    self.p:key('SECONDSCROLL_DOWN'):key('SECONDSCROLL_UP'):key('SECONDSCROLL_PAGEDOWN'):key('SECONDSCROLL_PAGEUP')
+    self.p:string(': Scroll')
 end
 
-function HistScreen:page_start()
-    return self.page * self.page_height - self.page_height + 1
-end
-
-function HistScreen:page_end()
-    return math.min(self.page * self.page_height, #self.history)
+function HistScreen:render_rows()
+    self.p:string('  Page ' .. self.rows.page .. ' of ' .. self.rows:max_page(), {fg = COLOR_GREEN}):newline()
+    self.rows:print_rows(
+        function(idx, marked, is_cursor, tab)
+            row_color = marked and COLOR_RED or COLOR_GREY
+            row_color = is_cursor and row_color + 8 or row_color
+            self.p:string(('%2i: (%ix%ix%i) %s'):format(idx, tab[1], tab[2], tab[3], tab[4]),
+                {fg = row_color})
+            self.p:newline()
+        end
+    )
 end
 
 function HistScreen:render(_p)
     self.super.render(self, _p)
-    local p = gui.Painter.new_wh(
+    self.p = gui.Painter.new_wh(
         self.df_layout.menu.x1 + 1,
         self.df_layout.menu.y1,
         self.df_layout.menu.width - 2,
         self.df_layout.menu.height - 1
     )
-    p:pen(COLOR_WHITE)
-    p:key_pen(COLOR_LIGHTRED)
-    if #self.history == 0 then
-        p:string('History empty', {fg = COLOR_LIGHTRED})
-        return
+    if not self.rows:has_rows() then
+        self.p:seek(0, self.p.y1)
+        self.p:string('History empty', {fg = COLOR_LIGHTRED}):newline()
+        self.p:pen(COLOR_DARKGREY)  -- render menu as 'greyed out'
+        self.p:key_pen(COLOR_RED)   --
+    else
+        self.p:pen(COLOR_WHITE)
+        self.p:key_pen(COLOR_LIGHTRED)
+        self:render_rows()
     end
-    p:string('Page ' .. self.page .. ' of ' .. math.floor(#self.history / self.page_height + 1), {fg = COLOR_GREEN}):newline()
-    for i = self:page_start(), self:page_end() do
-        local hitem = self.history[i]
-        p:string(('%2i: (%ix%ix%i) %s'):format(i, hitem.dimx, hitem.dimy, hitem.dimz, hitem.desc),
-            {fg = i == self.cursor and COLOR_WHITE or COLOR_GREY})
-        p:newline()
-    end
-    p:seek(0, p.y2 - 3)
-    p:key('CUSTOM_U'):string(': Undo, ')
-    p:key('CUSTOM_R'):string(': Redo, ')
-    p:key('CUSTOM_Z'):string(': Zoom')
-    p:newline()
-    p:key('SECONDSCROLL_DOWN'):key('SECONDSCROLL_UP'):key('SECONDSCROLL_PAGEDOWN'):key('SECONDSCROLL_PAGEUP')
-    p:string(': Scroll')
+    self:render_menu()
 end
 
 function HistScreen:onInput(keys)
     if keys.LEAVESCREEN then
         self:dismiss()
     end
-    if #self.history == 0 then
+    if not self.rows:has_rows() then
         return
     end
-    local hitem = self.history[self.cursor]
+    local hitem = self.rows:get_row()
     if keys.SECONDSCROLL_DOWN or keys.SECONDSCROLL_UP or keys.SECONDSCROLL_PAGEDOWN or keys.SECONDSCROLL_PAGEUP then
-        self.cursor = scroll_index(
-            self.cursor,
-            ((keys.SECONDSCROLL_DOWN or keys.SECONDSCROLL_PAGEDOWN) and 1 or -1) *
-                ((keys.SECONDSCROLL_PAGEUP or keys.SECONDSCROLL_PAGEDOWN) and self.page_height or 1),
-            1,
-            #self.history,
+        self.rows:update_scroll(
+            ((keys.SECONDSCROLL_DOWN or keys.SECONDSCROLL_PAGEDOWN) and 1 or -1),  -- scroll delta
+            ((keys.SECONDSCROLL_PAGEUP or keys.SECONDSCROLL_PAGEDOWN) and true or false), -- scroll by page
             {wrap = true}
         )
-        self.page = page_number(self.cursor, self.page_height)
     elseif keys.CUSTOM_U or keys.CUSTOM_R then
         reset_stage(hitem.id, keys.CUSTOM_U and 0 or 1)
+    elseif keys.CUSTOM_SHIFT_U or keys.CUSTOM_SHIFT_R then
+        self.rows:stage_marked(keys.CUSTOM_SHIFT_U and 0 or 1)
+    elseif keys.CUSTOM_SHIFT_D then
+        self.rows:delete_history()
+    elseif keys.CUSTOM_D then
+        if self.rows:has_marked_rows() then
+            self.rows:delete_marked_rows()
+        else
+            self.rows:delete_row()
+        end
     elseif keys.CUSTOM_Z then
         local pos = {x = hitem.centerx, y = hitem.centery, z = hitem.centerz}
         df.global.cursor:assign(pos)
         dfhack.gui.revealInDwarfmodeMap(pos, true)
+    elseif keys.SELECT then
+        self.rows:mark_row()
+    elseif self:propagateMoveKeys(keys) then
+        return
     end
 end
 
+--
+-- Local functions
+--
+
 function history()
-    HistScreen({history=get_history()}):show()
+    HistScreen():show()
 end
 
 return _ENV
