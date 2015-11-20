@@ -20,7 +20,6 @@ function HistRows:read_history()
     self.history = {}
     for i, v in pairs(hist) do
         self.history[#hist - i + 1] = v
-        self.history[#hist - i + 1].orig_id = i -- save the C++ ID for per-row delete
     end
 end
 
@@ -113,7 +112,7 @@ function HistRows:delete_rows(first, last, opts)
     if not last then last = first end
     -- re-reverse the IDs for a ranged delete
     if first ~= last then first, last = last, first end
-    remove_history(self.history[first].orig_id, self.history[last].orig_id)
+    remove_history(self.history[first].id, self.history[last].id)
     if opts.reread then self:read_history() end
     if self.cursor > #self.history then self.cursor = #self.history end
 end

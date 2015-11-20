@@ -345,7 +345,7 @@ namespace DHLuaApi {
     {
         int start_index = luaL_checkint(L, 1),
             end_index = luaL_checkint(L, 2);
-        int ret = erase_history(start_index - 1, end_index - 1);
+        int ret = erase_history(start_index, end_index);
         if (ret == 1)
             luaL_error(L, "remove_history: invalid start_index: %d (end_index: %d)", start_index, end_index);
         if (ret == 2)
