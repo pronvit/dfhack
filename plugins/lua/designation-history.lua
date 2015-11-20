@@ -23,11 +23,8 @@ function HistRows:read_history()
     end
 end
 
-function HistRows:init(screen_rows)
+function HistRows:init()
     self:read_history()
-    local min_page_size = 15 -- max rows that can be shown at 25 row resolution
-    self.page_height = math.max(screen_rows - 11, min_page_size)
-    self.page = 1
     self.cursor = 1
 end
 
@@ -35,7 +32,10 @@ function HistRows:max_page()
     return math.floor(#self.history / self.page_height + 1)
 end
 
-function HistRows:paginate()
+function HistRows:paginate(screen_rows)
+    local min_page_size = 15 -- max rows that can be shown at 25 row resolution
+    if screen_rows then self.screen_rows = screen_rows end
+    self.page_height = math.max(self.screen_rows - 11, min_page_size)
     if self.cursor <= self.page_height then
         self.page = 1
     else
@@ -140,11 +140,15 @@ end
 -- HistScreen
 --
 
+function HistScreen:init()
+    self.super.init(self)
+    self.rows = HistRows()
+end
+
 function HistScreen:onResize(screen_cols, screen_rows)
-    -- onResize is called when the MenuOverlay is first created as well as after each GUI resize
-    -- therefore, populate the rows here so row count is always in sync with window size.
+    -- Update pagination for size of active window
     self.super.onResize(self, screen_cols, screen_rows)
-    self.rows = HistRows(screen_rows)
+    self.rows:paginate(screen_rows)
 end
 
 function HistScreen:render_menu()
