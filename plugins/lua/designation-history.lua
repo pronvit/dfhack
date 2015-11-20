@@ -131,9 +131,21 @@ end
 function HistRows:stage_marked(stage)
     for i = 1, #self.history do
         if self.history[i].mark == 1 then
-            reset_stage(self.history[i].id, stage)
+            self:stage_row(stage, self.history[i])
         end
     end
+end
+
+function HistRows:stage_row(stage, item)
+    if not item then item = self.history[self.cursor] end
+    reset_stage(item.id, stage)
+end
+
+function HistRows:zoom_row()
+    local item = self.history[self.cursor]
+    local pos = {x = item.centerx, y = item.centery, z = item.centerz}
+    df.global.cursor:assign(pos)
+    dfhack.gui.revealInDwarfmodeMap(pos, true)
 end
 
 --
@@ -209,7 +221,6 @@ function HistScreen:onInput(keys)
     if not self.rows:has_rows() then
         return
     end
-    local hitem = self.rows:get_row()
     if keys.SECONDSCROLL_DOWN or keys.SECONDSCROLL_UP or keys.SECONDSCROLL_PAGEDOWN or keys.SECONDSCROLL_PAGEUP then
         self.rows:update_scroll(
             ((keys.SECONDSCROLL_DOWN or keys.SECONDSCROLL_PAGEDOWN) and 1 or -1),  -- scroll delta
@@ -217,7 +228,7 @@ function HistScreen:onInput(keys)
             {wrap = true}
         )
     elseif keys.CUSTOM_U or keys.CUSTOM_R then
-        reset_stage(hitem.id, keys.CUSTOM_U and 0 or 1)
+        self.rows:stage_row(keys.CUSTOM_U and 0 or 1)
     elseif keys.CUSTOM_SHIFT_U or keys.CUSTOM_SHIFT_R then
         self.rows:stage_marked(keys.CUSTOM_SHIFT_U and 0 or 1)
     elseif keys.CUSTOM_SHIFT_D then
@@ -229,9 +240,7 @@ function HistScreen:onInput(keys)
             self.rows:delete_row()
         end
     elseif keys.CUSTOM_Z then
-        local pos = {x = hitem.centerx, y = hitem.centery, z = hitem.centerz}
-        df.global.cursor:assign(pos)
-        dfhack.gui.revealInDwarfmodeMap(pos, true)
+        self.rows:zoom_row()
     elseif keys.SELECT then
         self.rows:mark_row()
     elseif self:propagateMoveKeys(keys) then
