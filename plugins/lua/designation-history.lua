@@ -131,7 +131,7 @@ end
 function HistRows:stage_marked(stage)
     for i = 1, #self.history do
         if self.history[i].mark == 1 then
-            reset_stage(i - 1, stage)
+            reset_stage(self.history[i].id, stage)
         end
     end
 end
