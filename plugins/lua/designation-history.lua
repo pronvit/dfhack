@@ -50,13 +50,11 @@ function HistRows:paginate(screen_rows)
 end
 
 function HistRows:update_scroll(delta, page_scroll, opts)
-    if not opts then opts = {} end
-    if opts.wrap == nil then opts.wrap = true end
+    opts = opts or {wrap=true}
     local min = 1
     local max = #self.history
     if page_scroll then delta = delta * self.page_height end
     local index = self.cursor + delta
-
     if delta < 0 and index < min then
         if index <= min + delta and opts.wrap then
             index = max
@@ -75,11 +73,11 @@ function HistRows:update_scroll(delta, page_scroll, opts)
 end
 
 function HistRows:get_row(index)
-    if not index then index = self.cursor end
+    index = index or self.cursor
     return self.history[index]
 end
 
-function HistRows:mark_row()
+function HistRows:toggle_mark_row()
     if self.history[self.cursor].mark then
         self.history[self.cursor].mark = false
         self.marked_rows = self.marked_rows - 1
@@ -94,30 +92,31 @@ function HistRows:has_marked_rows()
 end
 
 function HistRows:delete_history()
-    self:delete_rows(1, #self.history)
+    self:delete_rows(1, #self.history)()
 end
 
 function HistRows:delete_marked_rows()
     for i = 1, #self.history do
         if self.history[i].mark then
-            self:delete_rows(i, i, {reread=false})
+            update_screen_func = self:delete_rows(i)
             self.marked_rows = self.marked_rows - 1
         end
     end
-    self:read_history()
+    update_screen_func()
 end
 
 function HistRows:delete_row()
-    self:delete_rows(self.cursor)
+    self:delete_rows(self.cursor)()
 end
 
-function HistRows:delete_rows(first, last, opts)
-    if not opts then opts = {reread=true} end
-    if not last then last = first end
-    -- re-reverse the IDs for a ranged delete
-    if first ~= last then first, last = last, first end
-    remove_history(self.history[first].id, self.history[last].id)
-    if opts.reread then self:read_history() end
+function HistRows:delete_rows(first, last)
+    last = last or first
+    -- Reverse order so a range will match plugin order
+    remove_history(self.history[last].id, self.history[first].id)
+    return function() -- returns a function that updates screen so caller decides when to do so.
+        self:read_history()
+        self:paginate()
+    end
 end
 
 function HistRows:stage_marked(stage)
@@ -129,7 +128,7 @@ function HistRows:stage_marked(stage)
 end
 
 function HistRows:stage_row(stage, item)
-    if not item then item = self.history[self.cursor] end
+    item = item or self.history[self.cursor]
     reset_stage(item.id, stage)
 end
 
@@ -243,7 +242,7 @@ function HistScreen:onInput(keys)
     elseif keys.CUSTOM_Z then
         self.rows:zoom_row()
     elseif keys.SELECT then
-        self.rows:mark_row()
+        self.rows:toggle_mark_row()
     elseif self:propagateMoveKeys(keys) then
         return
     end
