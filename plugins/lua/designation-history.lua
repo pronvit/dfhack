@@ -26,6 +26,7 @@ end
 function HistRows:init()
     self:read_history()
     self.cursor = 1
+    self.marked_rows = 0
 end
 
 function HistRows:max_page()
@@ -53,7 +54,13 @@ function HistRows:get_row(index)
 end
 
 function HistRows:mark_row()
-    self.history[self.cursor].mark = self.history[self.cursor].mark == 1 and 0 or 1
+    if self.history[self.cursor].mark then
+        self.history[self.cursor].mark = false
+        self.marked_rows = self.marked_rows - 1
+    else
+        self.history[self.cursor].mark = true
+        self.marked_rows = self.marked_rows + 1
+    end
 end
 
 function HistRows:update_scroll(delta, page_scroll, opts)
@@ -86,17 +93,12 @@ function HistRows:delete_row()
 end
 
 function HistRows:has_marked_rows()
-    for i = 1, #self.history do
-        if self.history[i].mark == 1 then
-            return true
-        end
-    end
-    return false
+    return self.marked_rows > 0
 end
 
 function HistRows:delete_marked_rows()
     for i = 1, #self.history do
-        if self.history[i].mark == 1 then
+        if self.history[i].mark then
             self:delete_rows(i, i, {reread=false})
         end
     end
@@ -121,16 +123,16 @@ function HistRows:print_rows(print_func)
     local first = self.page * self.page_height - self.page_height + 1
     local last = math.min(self.page * self.page_height, #self.history)
     for i = first, last do
-        local selected = self.history[i].mark == 1 and true or false
+        local marked = self.history[i].mark
         local is_cursor = i == self.cursor and true or false
-        print_func(i, selected, is_cursor,
+        print_func(i, marked, is_cursor,
         {self.history[i].dimx, self.history[i].dimy, self.history[i].dimz, self.history[i].desc})
     end
 end
 
 function HistRows:stage_marked(stage)
     for i = 1, #self.history do
-        if self.history[i].mark == 1 then
+        if self.history[i].mark then
             self:stage_row(stage, self.history[i])
         end
     end
