@@ -203,7 +203,7 @@ static int d_history_idx;
 
 static int erase_history(int start_index, int end_index)
 {
-	int max_index = d_history.size() - 1;
+    int max_index = d_history.size() - 1;
     if (start_index < 0 || start_index > max_index)
         return 1;
     if (end_index < 0 || end_index > max_index || end_index < start_index)
