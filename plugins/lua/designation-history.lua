@@ -154,11 +154,7 @@ end
 function HistScreen:render_menu()
     self.p:seek(0, self.p.y2 - 6)
     self.p:key('SELECT'):string(': Mark, ')
-    if self.rows:has_marked_rows() then
-        self.p:key('CUSTOM_D'):string(': Delete marks'):newline()
-    else
-        self.p:key('CUSTOM_D'):string(': Delete row'):newline()
-    end
+    self.p:key('CUSTOM_D'):string(': Delete ' .. (self.rows:has_marked_rows() and 'marks' or 'row')):newline()
     self.p:key('CUSTOM_SHIFT_D'):string(': Delete all'):newline()
     if self.rows:has_marked_rows() then
         self.p:key('CUSTOM_SHIFT_U'):string(': Undo all marked'):newline()
