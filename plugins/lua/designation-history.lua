@@ -78,11 +78,11 @@ function HistRows:get_row(index)
 end
 
 function HistRows:toggle_mark_row()
-    if self.history[self.cursor].mark then
-        self.history[self.cursor].mark = false
+    if self:get_row().mark then
+        self:get_row().mark = false
         self.marked_rows = self.marked_rows - 1
     else
-        self.history[self.cursor].mark = true
+        self:get_row().mark = true
         self.marked_rows = self.marked_rows + 1
     end
 end
@@ -128,12 +128,12 @@ function HistRows:stage_marked(stage)
 end
 
 function HistRows:stage_row(stage, item)
-    item = item or self.history[self.cursor]
+    item = item or self:get_row()
     reset_stage(item.id, stage)
 end
 
 function HistRows:zoom_row()
-    local item = self.history[self.cursor]
+    local item = self:get_row()
     local pos = {x = item.centerx, y = item.centery, z = item.centerz}
     df.global.cursor:assign(pos)
     dfhack.gui.revealInDwarfmodeMap(pos, true)
