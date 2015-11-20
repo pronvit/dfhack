@@ -15,9 +15,9 @@ HistRows = defclass(HistRows)
 --
 
 function HistRows:init()
-    self:read_history()
     self.cursor = 1
     self.marked_rows = 0
+    self:read_history()
 end
 
 function HistRows:read_history()
@@ -27,6 +27,7 @@ function HistRows:read_history()
     for i, v in pairs(hist) do
         self.history[#hist - i + 1] = v
     end
+    if self.cursor > #self.history then self.cursor = #self.history end -- ensure we're in sync after deletes
 end
 
 function HistRows:has_rows()
@@ -100,6 +101,7 @@ function HistRows:delete_marked_rows()
     for i = 1, #self.history do
         if self.history[i].mark then
             self:delete_rows(i, i, {reread=false})
+            self.marked_rows = self.marked_rows - 1
         end
     end
     self:read_history()
@@ -116,7 +118,6 @@ function HistRows:delete_rows(first, last, opts)
     if first ~= last then first, last = last, first end
     remove_history(self.history[first].id, self.history[last].id)
     if opts.reread then self:read_history() end
-    if self.cursor > #self.history then self.cursor = #self.history end
 end
 
 function HistRows:stage_marked(stage)
