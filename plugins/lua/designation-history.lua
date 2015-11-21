@@ -2,6 +2,7 @@ local _ENV = mkmodule('plugins.designation-history')
 
 gui = require 'gui'
 guidm = require 'gui.dwarfmode'
+dialogs = require 'gui.dialogs'
 
 --
 -- Create classes
@@ -17,6 +18,7 @@ HistRows = defclass(HistRows)
 function HistRows:init()
     self.cursor = 1
     self.marked_rows = 0
+    self.screen_rows = df.global.gps.dimy
     self:read_history()
 end
 
@@ -28,6 +30,7 @@ function HistRows:read_history()
         self.history[#hist - i + 1] = v
     end
     if self.cursor > #self.history then self.cursor = #self.history end -- ensure we're in sync after deletes
+    self:paginate()
 end
 
 function HistRows:has_rows()
@@ -92,42 +95,40 @@ function HistRows:has_marked_rows()
 end
 
 function HistRows:delete_history()
-    self:delete_rows(1, #self.history)()
+    self:delete_rows(1, #self.history)
+    self:read_history()
 end
 
 function HistRows:delete_marked_rows()
     for i = 1, #self.history do
         if self.history[i].mark then
-            update_screen_func = self:delete_rows(i)
+            self:delete_rows(i)
             self.marked_rows = self.marked_rows - 1
         end
     end
-    update_screen_func()
+    self:read_history()
 end
 
 function HistRows:delete_row()
-    self:delete_rows(self.cursor)()
+    self:delete_rows(self.cursor)
+    self:read_history()
 end
 
 function HistRows:delete_rows(first, last)
     last = last or first
     -- Reverse order so a range will match plugin order
     remove_history(self.history[last].id, self.history[first].id)
-    return function() -- returns a function that updates screen so caller decides when to do so.
-        self:read_history()
-        self:paginate()
-    end
 end
 
-function HistRows:stage_marked(stage)
+function HistRows:reset_marked(stage)
     for i = 1, #self.history do
         if self.history[i].mark then
-            self:stage_row(stage, self.history[i])
+            self:reset_row(stage, self.history[i])
         end
     end
 end
 
-function HistRows:stage_row(stage, item)
+function HistRows:reset_row(stage, item)
     item = item or self:get_row()
     reset_stage(item.id, stage)
 end
@@ -143,8 +144,7 @@ function HistRows:print_rows(print_func)
     local first = self.page * self.page_height - self.page_height + 1
     local last = math.min(self.page * self.page_height, #self.history)
     for i = first, last do
-        print_func(i, self.history[i].mark, i == self.cursor and true or false,
-        {self.history[i].dimx, self.history[i].dimy, self.history[i].dimz, self.history[i].desc})
+        print_func(i, self.history[i].mark, i == self.cursor and true or false, self.history[i])
     end
 end
 
@@ -183,10 +183,10 @@ end
 function HistScreen:render_rows()
     self.p:string('  Page ' .. self.rows.page .. ' of ' .. self.rows:max_page(), {fg = COLOR_GREEN}):newline()
     self.rows:print_rows(
-        function(idx, marked, is_cursor, tab)
+        function(idx, marked, is_cursor, entry)
             row_color = marked and COLOR_RED or COLOR_GREY
             row_color = is_cursor and row_color + 8 or row_color
-            self.p:string(('%2i: (%ix%ix%i) %s'):format(idx, tab[1], tab[2], tab[3], tab[4]),
+            self.p:string(('%2i: (%ix%ix%i) %s'):format(idx, entry.dimx, entry.dimy, entry.dimz, entry.desc),
                 {fg = row_color})
             self.p:newline()
         end
@@ -205,7 +205,7 @@ function HistScreen:render(_p)
         self.p:seek(0, self.p.y1)
         self.p:string('History empty', {fg = COLOR_LIGHTRED}):newline()
         self.p:pen(COLOR_DARKGREY)  -- render menu as 'greyed out'
-        self.p:key_pen(COLOR_RED)   --
+        self.p:key_pen(COLOR_RED)
     else
         self.p:pen(COLOR_WHITE)
         self.p:key_pen(COLOR_LIGHTRED)
@@ -228,9 +228,9 @@ function HistScreen:onInput(keys)
             {wrap = true}
         )
     elseif keys.CUSTOM_U or keys.CUSTOM_R then
-        self.rows:stage_row(keys.CUSTOM_U and 0 or 1)
+        self.rows:reset_row(keys.CUSTOM_U and 0 or 1)
     elseif keys.CUSTOM_SHIFT_U or keys.CUSTOM_SHIFT_R then
-        self.rows:stage_marked(keys.CUSTOM_SHIFT_U and 0 or 1)
+        self.rows:reset_marked(keys.CUSTOM_SHIFT_U and 0 or 1)
     elseif keys.CUSTOM_SHIFT_D then
         self.rows:delete_history()
     elseif keys.CUSTOM_D then

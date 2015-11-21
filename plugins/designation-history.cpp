@@ -201,18 +201,18 @@ public:
 static std::vector<Designation*> d_history;
 static int d_history_idx;
 
-static int erase_history(int start_index, int end_index)
+static bool erase_history(int start_index, int end_index)
 {
     int max_index = d_history.size() - 1;
     if (start_index < 0 || start_index > max_index)
-        return 1;
+        return false;
     if (end_index < 0 || end_index > max_index || end_index < start_index)
-        return 2;
+        return false;
     d_history.erase(d_history.begin() + start_index, d_history.begin() + end_index + 1); // delete inclusively from start_index to end_index.
     if (d_history_idx >= start_index || d_history_idx <= end_index ||
             d_history_idx > d_history.size() - 1)
         d_history_idx = d_history.size() - 1;
-    return 0;
+    return true;
 }
 
 static int64_t lua_last_mtime = -1;
@@ -220,16 +220,9 @@ const char *lua_filename = "hack/lua/plugins/designation-history.lua";
 
 bool reload_lua()
 {
-    color_ostream &out = Core::getInstance().getConsole();
     auto L = Lua::Core::State;
     Lua::StackUnwinder top(L);
-    if (!lua_checkstack(L, 4))
-        return false;
-    Lua::PushDFHack(L);
-    lua_getfield(L, -1, "reload");
-    lua_remove(L, -2);
-    lua_pushstring(L, "plugins.designation-history");
-    return Lua::SafeCall(out, L, 1, 0);
+    return !luaL_dostring(L, "if package.loaded[\"plugins.designation-history\"] then reload(\"plugins.designation-history\") end");
 }
 
 inline bool lua_safe_call (int nargs)
@@ -249,7 +242,7 @@ bool lua_init_call (const char *func, int stack_size = 0) {
     }
     else if (cur_mtime != lua_last_mtime)
     {
-        if (lua_last_mtime != -1 && !reload_lua())
+        if (!reload_lua())
         {
             out.printerr("Could not reload %s\n", lua_filename);
             return false;
@@ -345,11 +338,8 @@ namespace DHLuaApi {
     {
         int start_index = luaL_checkint(L, 1),
             end_index = luaL_checkint(L, 2);
-        int ret = erase_history(start_index, end_index);
-        if (ret == 1)
-            luaL_error(L, "remove_history: invalid start_index: %d (end_index: %d)", start_index, end_index);
-        if (ret == 2)
-            luaL_error(L, "remove_history: invalid end_index: %d (start_index: %d)", end_index, start_index);
+        if (!erase_history(start_index, end_index))
+            luaL_error(L, "invalid selection (id: %d...%d)", start_index, end_index);
         return 0;
     }
 }
@@ -418,11 +408,11 @@ struct designation_menu_hook : df::viewscreen_dwarfmodest {
             auto dims = Gui::getDwarfmodeViewDims();
             int x = dims.menu_x1 + 1;
             int y = 1;
-            OutputString(COLOR_LIGHTRED, x, y, "Alt+U");
+            OutputString(COLOR_LIGHTRED, x, y, "Alt+u");
             OutputString(can_undo() ? COLOR_WHITE : COLOR_GREY, x, y, "ndo, ");
-            OutputString(COLOR_LIGHTRED, x, y, "R");
+            OutputString(COLOR_LIGHTRED, x, y, "+r");
             OutputString(can_redo() ? COLOR_WHITE : COLOR_GREY, x, y, "edo, ");
-            OutputString(COLOR_LIGHTRED, x, y, "H");
+            OutputString(COLOR_LIGHTRED, x, y, "+h");
             OutputString(COLOR_WHITE, x, y, "istory");
         }
     }
