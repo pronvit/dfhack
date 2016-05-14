@@ -28,3 +28,6 @@
 [submodule "scripts/3rdparty/maienm"]
 	path = scripts/3rdparty/maienm
 	url = git://github.com/DFHack/maienm-scripts.git
+[submodule "plugins/exportmaps"]
+	path = plugins/exportmaps
+	url = https://github.com/DFHack/exportmaps
