@@ -117,8 +117,8 @@ if (NOT EXISTS ${dfhack_SOURCE_DIR}/library/xml/codegen.pl OR NOT EXISTS ${dfhac
 endif()
 
 # set up versioning.
-set(DF_VERSION "0.43.03")
-SET(DFHACK_RELEASE "alpha1")
+set(DF_VERSION "0.43.05")
+SET(DFHACK_RELEASE "alpha0")
 SET(DFHACK_PRERELEASE TRUE)
 
 set(DFHACK_VERSION "${DF_VERSION}-${DFHACK_RELEASE}")
@@ -202,7 +202,7 @@ else()
 endif()
 find_package(ZLIB REQUIRED)
 include_directories(depends/protobuf)
-include_directories(depends/lua/include)
+include_directories(depends/lua/src)
 include_directories(depends/md5)
 include_directories(depends/jsoncpp)
 include_directories(depends/tinyxml)

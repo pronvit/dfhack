@@ -20,33 +20,33 @@ IF(UNIX)
 ENDIF()
 
 SET (HDR_LIBLUA
-include/lapi.h
-include/lauxlib.h
-include/lcode.h
-include/lctype.h
-include/ldebug.h
-include/ldo.h
-include/lfunc.h
-include/lgc.h
-include/llex.h
-include/llimits.h
-include/lmem.h
-include/lobject.h
-include/lopcodes.h
-include/lparser.h
-include/lstate.h
-include/lstring.h
-include/ltable.h
-include/ltm.h
-include/lua.h
-include/luaconf.h
-include/lualib.h
-include/lundump.h
-include/lvm.h
-include/lzio.h
+src/lapi.h
+src/lauxlib.h
+src/lcode.h
+src/lctype.h
+src/ldebug.h
+src/ldo.h
+src/lfunc.h
+src/lgc.h
+src/llex.h
+src/llimits.h
+src/lmem.h
+src/lobject.h
+src/lopcodes.h
+src/lparser.h
+src/lstate.h
+src/lstring.h
+src/ltable.h
+src/ltm.h
+src/lua.h
+src/luaconf.h
+src/lualib.h
+src/lundump.h
+src/lvm.h
+src/lzio.h
 )
 SET_SOURCE_FILES_PROPERTIES(${HDR_LIBLUA} PROPERTIES HEADER_FILE_ONLY TRUE)
-include_directories(include)
+include_directories(src)
 
 # Build Libraries
 SET (SRC_LIBLUA
@@ -82,6 +82,7 @@ src/ltm.c
 src/lundump.c
 src/lvm.c
 src/lzio.c
+src/lutf8lib.c
 )
 # compile with C++ compiler
 set_source_files_properties(${SRC_LIBLUA} PROPERTIES LANGUAGE CXX)
