@@ -6,10 +6,10 @@
 	url = git://github.com/DFHack/isoworld.git
 [submodule "library/xml"]
 	path = library/xml
-	url = git://github.com/DFHack/df-structures.git
+	url = git://github.com/pronvit/df-structures.git
 [submodule "depends/clsocket"]
 	path = depends/clsocket
 	url = git://github.com/DFHack/clsocket.git
 [submodule "scripts2"]
 	path = scripts
-	url = git://github.com/dfhack/scripts.git
+	url = git://github.com/pronvit/scripts.git
