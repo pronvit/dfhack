@@ -99,7 +99,7 @@ void VersionInfoFactory::ParseVersion (TiXmlElement* entry, VersionInfo* mem)
     {
         mem->setOS(OS_WINDOWS);
         // set default image base. this is fixed for base relocation later
-        mem->setBase(0x400000);
+        mem->setBase(0x140000000);
     }
     else if(os == "linux")
     {
@@ -140,7 +140,7 @@ void VersionInfoFactory::ParseVersion (TiXmlElement* entry, VersionInfo* mem)
             }
             if ((is_vtable && no_vtables) || (!is_vtable && no_globals))
                 continue;
-            uintptr_t addr = strtol(cstr_value, 0, 0);
+            uintptr_t addr = strtoull(cstr_value, 0, 0);
             if (is_vtable)
                 mem->setVTable(cstr_key, addr);
             else

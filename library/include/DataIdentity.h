@@ -487,8 +487,12 @@ namespace df
     NUMBER_IDENTITY_TRAITS(uint32_t);
     NUMBER_IDENTITY_TRAITS(int64_t);
     NUMBER_IDENTITY_TRAITS(uint64_t);
+#if defined(_WIN32)    
+    NUMBER_IDENTITY_TRAITS(long);
+#else
     NUMBER_IDENTITY_TRAITS(intptr_t);
     NUMBER_IDENTITY_TRAITS(uintptr_t);
+#endif
     NUMBER_IDENTITY_TRAITS(float);
     NUMBER_IDENTITY_TRAITS(double);
 

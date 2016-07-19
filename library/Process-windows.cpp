@@ -306,7 +306,7 @@ uintptr_t Process::getBase()
 {
     if(d)
         return (uintptr_t) d->base;
-    return 0x400000;
+    return 0x140000000;
 }
 
 int Process::adjustOffset(int offset, bool to_file)
@@ -344,9 +344,11 @@ int Process::adjustOffset(int offset, bool to_file)
 
 string Process::doReadClassName (void * vptr)
 {
-    char * rtti = readPtr((char *)vptr - 0x4);
-    char * typeinfo = readPtr(rtti + 0xC);
-    string raw = readCString(typeinfo + 0xC); // skips the .?AV
+    char * rtti = readPtr((char *)vptr - sizeof(void*));
+    char * typeinfo = d->base + readDWord(rtti + 0xC);
+    string raw = readCString(typeinfo + 0x10+4); // skips the .?AV
+    if (!raw.length())
+        return "dummy";
     raw.resize(raw.length() - 2);// trim @@ from end
     return raw;
 }

@@ -1,6 +1,6 @@
 @echo off
-call "%VS100COMNTOOLS%vsvars32.bat"
-cd VC2010
-msbuild /m /p:Platform=Win32 /p:Configuration=RelWithDebInfo PACKAGE.vcxproj
+call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64
+cd VC2015
+msbuild /m /p:Platform=x64 /p:Configuration=RelWithDebInfo PACKAGE.vcxproj
 cd ..
 exit %ERRORLEVEL%

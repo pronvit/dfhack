@@ -82,7 +82,7 @@ using namespace DFHack;
 // multiple, but not virtual inheritance.
 struct MSVC_MPTR {
     void *method;
-    intptr_t this_shift;
+    uint32_t this_shift;
 };
 
 // Debug builds sometimes use additional thunks that
@@ -97,7 +97,7 @@ static uint32_t *follow_jmp(void *ptr)
         switch (*p)
         {
         case 0xE9: // jmp near rel32
-            p += 5 + *(int32_t*)(p+1);
+            p += 5 + *(int32_t*)(p+1)+1;
             break;
         case 0xEB: // jmp short rel8
             p += 2 + *(int8_t*)(p+1);
